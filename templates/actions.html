@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genesis - Actions</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .actions-page {
+            padding: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .actions-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .actions-header h1 {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+        }
+
+        .actions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .action-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            transition: var(--transition);
+        }
+
+        .action-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .action-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.75rem;
+        }
+
+        .action-name {
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: var(--accent);
+        }
+
+        .action-plugin {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            padding: 0.25rem 0.5rem;
+            background: var(--bg-input);
+            border-radius: 0.25rem;
+        }
+
+        .action-desc {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+        }
+
+        .action-meta {
+            font-size: 0.8rem;
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .action-meta span {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .action-params {
+            background: var(--bg-input);
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            font-size: 0.75rem;
+            font-family: 'Consolas', monospace;
+        }
+
+        .add-action-btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: var(--transition);
+        }
+
+        .add-action-btn:hover {
+            transform: scale(1.02);
+        }
+
+        .back-link {
+            color: var(--accent);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 500;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 4rem;
+            color: var(--text-muted);
+        }
+
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-sidebar);
+            border-radius: 1rem;
+            padding: 2rem;
+            width: 90%;
+            max-width: 700px;
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+
+        .modal h2 {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            background: var(--bg-input);
+            color: var(--text-main);
+            font-size: 0.9rem;
+        }
+
+        .form-group textarea {
+            min-height: 200px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.85rem;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: 500;
+            transition: var(--transition);
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: var(--bg-input);
+            color: var(--text-main);
+        }
+
+        .script-mode-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .script-mode-tabs button {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border);
+            background: var(--bg-input);
+            color: var(--text-main);
+            border-radius: 0.5rem;
+            cursor: pointer;
+        }
+
+        .script-mode-tabs button.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .folder-upload {
+            border: 2px dashed var(--border);
+            border-radius: 0.75rem;
+            padding: 2rem;
+            text-align: center;
+            color: var(--text-muted);
+            cursor: pointer;
+        }
+
+        .folder-upload:hover {
+            border-color: var(--accent);
+            background: var(--glass);
+        }
+
+        .folder-upload input {
+            display: none;
+        }
+
+        .btn-sm {
+            padding: 0.4rem 0.6rem;
+            border: none;
+            border-radius: 0.4rem;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: var(--transition);
+        }
+
+        .btn-edit {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-export {
+            background: var(--bg-input);
+            color: var(--text-main);
+        }
+
+        .btn-delete {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-sm:hover {
+            transform: scale(1.05);
+        }
+
+        .install-btn {
+            background: var(--bg-input);
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: var(--transition);
+        }
+
+        .install-btn:hover {
+            background: var(--accent);
+            color: white;
+        }
+    </style>
+</head>
+
+<body data-theme="dark">
+    <!-- Sidebar -->
+    <aside class="sidebar"
+        style="width: 250px; height: 100vh; position: fixed; left: 0; top: 0; background: var(--bg-sidebar); border-right: 1px solid var(--border); padding: 1.5rem 1rem;">
+        <div class="sidebar-header" style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 2rem;">
+            <span style="font-size: 1.25rem; font-weight: 700;">Genesis AI</span>
+        </div>
+        <nav style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <a href="/"
+                style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border-radius: 0.5rem; color: var(--text-main); text-decoration: none; transition: var(--transition);">
+                <i class="fas fa-comment-dots"></i> Chat
+            </a>
+            <a href="/manage-chats"
+                style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border-radius: 0.5rem; color: var(--text-main); text-decoration: none;">
+                <i class="fas fa-history"></i> Manage Chats
+            </a>
+            <a href="/actions"
+                style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border-radius: 0.5rem; background: var(--accent); color: white; text-decoration: none;">
+                <i class="fas fa-plug"></i> Plugins
+            </a>
+            <a href="/tasks"
+                style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border-radius: 0.5rem; color: var(--text-main); text-decoration: none;">
+                <i class="fas fa-tasks"></i> Tasks
+            </a>
+            {% if user.role == 'admin' %}
+            <a href="/admin"
+                style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border-radius: 0.5rem; color: var(--text-main); text-decoration: none;">
+                <i class="fas fa-user-shield"></i> Admin
+            </a>
+            <a href="/settings"
+                style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border-radius: 0.5rem; color: var(--text-main); text-decoration: none;">
+                <i class="fas fa-cog"></i> Settings
+            </a>
+            {% endif %}
+            <a href="/logout"
+                style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border-radius: 0.5rem; color: var(--text-main); text-decoration: none; margin-top: 1rem;">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </a>
+        </nav>
+    </aside>
+
+    <div class="actions-page" style="margin-left: 250px;">
+        <div class="actions-header">
+            <div style="display: flex; align-items: center; gap: 1.5rem;">
+                <h1><i class="fas fa-plug" style="color: var(--accent);"></i> Actions Manager</h1>
+            </div>
+            <div style="display: flex; gap: 1rem;">
+                <label class="install-btn">
+                    <i class="fas fa-file-import"></i> Install .gplug
+                    <input type="file" id="install-file" accept=".gplug" style="display:none;"
+                        onchange="installPlugin(this)">
+                </label>
+                <button class="add-action-btn" onclick="showCreateModal()">
+                    <i class="fas fa-plus"></i> Create Action
+                </button>
+            </div>
+        </div>
+
+        <div id="actions-grid" class="actions-grid">
+            <!-- Actions loaded dynamically -->
+        </div>
+
+        <div id="empty-state" class="empty-state" style="display: none;">
+            <i class="fas fa-puzzle-piece"></i>
+            <h2>No Actions Yet</h2>
+            <p>Create your first action to extend Genesis capabilities.</p>
+        </div>
+    </div>
+
+    <!-- Create Action Modal -->
+    <div id="create-modal" class="modal-overlay">
+        <div class="modal">
+            <h2><i class="fas fa-plus-circle"></i> Create New Action</h2>
+
+            <form id="create-action-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Plugin ID</label>
+                        <input type="text" id="plugin-id" placeholder="my_plugin" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Plugin Name</label>
+                        <input type="text" id="plugin-name" placeholder="My Plugin" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Version</label>
+                        <input type="text" id="plugin-version" value="1.0.0">
+                    </div>
+                    <div class="form-group">
+                        <label>Action Name</label>
+                        <input type="text" id="action-name" placeholder="do_something" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" id="action-description" placeholder="What this action does...">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Trigger</label>
+                        <select id="action-trigger">
+                            <option value="manual">Manual (AI Only)</option>
+                            <option value="pre_request">Pre-Request</option>
+                            <option value="post_request">Post-Request</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Cache TTL (seconds)</label>
+                        <input type="number" id="cache-ttl" value="0" min="0">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Action Scope</label>
+                        <select id="action-scope">
+                            {% if user.role == 'admin' %}
+                            <option value="system">System (Global)</option>
+                            <option value="user">User (Personal)</option>
+                            {% else %}
+                            <option value="user">Personal</option>
+                            {% endif %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Parameters (JSON)</label>
+                        <input type="text" id="action-params" placeholder='{"name": "string", "count": "number"}'>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Script Source</label>
+                    <div class="script-mode-tabs">
+                        <button type="button" class="active" onclick="setScriptMode('inline')">Inline Editor</button>
+                        <button type="button" onclick="setScriptMode('folder')">Upload Folder</button>
+                    </div>
+
+                    <div id="inline-editor">
+                        <textarea id="script-content" placeholder="# Your Python code here
+import os
+import json
+import sys
+
+def main():
+    args = json.loads(sys.stdin.read())
+    genesis_home = os.environ.get('GENESIS_HOME', '.')
+    
+    # Your logic here
+    result = {'message': 'Hello!'}
+    
+    print(json.dumps(result))
+
+if __name__ == '__main__':
+    main()
+"></textarea>
+                    </div>
+
+                    <div id="folder-upload" class="folder-upload" style="display: none;">
+                        <input type="file" id="folder-input" webkitdirectory directory multiple>
+                        <i class="fas fa-folder-open" style="font-size: 2rem; margin-bottom: 0.5rem;"></i>
+                        <p>Click to select plugin folder</p>
+                        <p id="folder-status" style="color: var(--accent);"></p>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Action</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const actionsGrid = document.getElementById('actions-grid');
+        const emptyState = document.getElementById('empty-state');
+        const createModal = document.getElementById('create-modal');
+        let uploadedFiles = [];
+
+        // Load theme
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        document.body.setAttribute('data-theme', savedTheme);
+
+        async function loadActions() {
+            try {
+                const resp = await fetch('/api/actions');
+                const actions = await resp.json();
+
+                if (Object.keys(actions).length === 0) {
+                    actionsGrid.style.display = 'none';
+                    emptyState.style.display = 'block';
+                    return;
+                }
+
+                actionsGrid.style.display = 'grid';
+                emptyState.style.display = 'none';
+                actionsGrid.innerHTML = '';
+
+                Object.entries(actions).forEach(([name, action]) => {
+                    const card = document.createElement('div');
+                    card.className = 'action-card';
+                    card.dataset.pluginId = action.plugin_id;
+
+                    const params = action.spec?.parameters || {};
+                    const paramsText = Object.keys(params).length > 0
+                        ? JSON.stringify(params, null, 2)
+                        : 'No parameters';
+
+                    const canEdit = action.role === 'user' || userRole === 'admin';
+
+                    card.innerHTML = `
+                        <div class="action-card-header">
+                            <div class="action-name">${name}</div>
+                            <span class="action-plugin">${action.plugin_id}</span>
+                        </div>
+                        <div class="action-desc">${action.spec?.description || 'No description'}</div>
+                        <div class="action-meta">
+                            <span><i class="fas fa-bolt"></i> ${action.trigger || 'manual'}</span>
+                            <span><i class="fas fa-clock"></i> TTL: ${action.cache_ttl || 0}s</span>
+                            <span><i class="fas fa-shield-alt"></i> ${action.role}</span>
+                        </div>
+                        <div class="action-params">${paramsText}</div>
+                        <div class="action-buttons" style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+                            ${canEdit ? `<button class="btn-sm btn-edit" onclick="editPlugin('${action.plugin_id}')"><i class="fas fa-edit"></i></button>` : ''}
+                            <button class="btn-sm btn-export" onclick="exportPlugin('${action.plugin_id}')"><i class="fas fa-download"></i></button>
+                            ${canEdit ? `<button class="btn-sm btn-delete" onclick="deletePlugin('${action.plugin_id}')"><i class="fas fa-trash"></i></button>` : ''}
+                        </div>
+                    `;
+                    actionsGrid.appendChild(card);
+                });
+            } catch (err) {
+                console.error('Failed to load actions:', err);
+            }
+        }
+
+        function showCreateModal() {
+            createModal.classList.add('active');
+        }
+
+        function closeModal() {
+            createModal.classList.remove('active');
+        }
+
+        function setScriptMode(mode) {
+            document.querySelectorAll('.script-mode-tabs button').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+
+            document.getElementById('inline-editor').style.display = mode === 'inline' ? 'block' : 'none';
+            document.getElementById('folder-upload').style.display = mode === 'folder' ? 'block' : 'none';
+        }
+
+        // Folder upload handling
+        document.getElementById('folder-input').addEventListener('change', function (e) {
+            uploadedFiles = Array.from(e.target.files);
+            document.getElementById('folder-status').textContent = `${uploadedFiles.length} files selected`;
+        });
+
+        document.getElementById('folder-upload').addEventListener('click', function () {
+            document.getElementById('folder-input').click();
+        });
+
+        // Form submission
+        document.getElementById('create-action-form').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const formData = new FormData();
+            formData.append('plugin_id', document.getElementById('plugin-id').value);
+            formData.append('plugin_name', document.getElementById('plugin-name').value);
+            formData.append('version', document.getElementById('plugin-version').value);
+            formData.append('action_name', document.getElementById('action-name').value);
+            formData.append('description', document.getElementById('action-description').value);
+            formData.append('trigger', document.getElementById('action-trigger').value);
+            formData.append('cache_ttl', document.getElementById('cache-ttl').value);
+            formData.append('scope', document.getElementById('action-scope').value);
+            formData.append('parameters', document.getElementById('action-params').value || '{}');
+
+            // Inline script or folder files
+            const inlineEditor = document.getElementById('inline-editor');
+            if (inlineEditor.style.display !== 'none') {
+                formData.append('script_content', document.getElementById('script-content').value);
+            } else {
+                uploadedFiles.forEach(file => {
+                    formData.append('files', file, file.webkitRelativePath || file.name);
+                });
+            }
+
+            try {
+                const resp = await fetch('/api/actions/create', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await resp.json();
+
+                if (result.status === 'created') {
+                    closeModal();
+                    loadActions();
+                } else {
+                    alert('Error: ' + (result.error || 'Unknown error'));
+                }
+            } catch (err) {
+                console.error('Create failed:', err);
+                alert('Failed to create action');
+            }
+        });
+
+        // Close modal on outside click
+        createModal.addEventListener('click', function (e) {
+            if (e.target === createModal) closeModal();
+        });
+
+        // User role for permission checks
+        const userRole = '{{ user.role }}';
+
+        // Edit Plugin
+        async function editPlugin(pluginId) {
+            try {
+                const resp = await fetch(`/api/actions/${pluginId}`);
+                const data = await resp.json();
+
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+
+                const plugin = data.plugin;
+                document.getElementById('plugin-id').value = plugin.id;
+                document.getElementById('plugin-name').value = plugin.name;
+                document.getElementById('plugin-version').value = plugin.version || '1.0.0';
+                document.getElementById('action-description').value = plugin.description || '';
+                document.getElementById('script-content').value = data.script_content || '';
+
+                document.getElementById('create-action-form').dataset.editMode = pluginId;
+                document.getElementById('plugin-id').disabled = true;
+
+                showCreateModal();
+            } catch (err) {
+                console.error('Edit failed:', err);
+                alert('Failed to load plugin for editing');
+            }
+        }
+
+        // Delete Plugin
+        async function deletePlugin(pluginId) {
+            if (!confirm(`Delete plugin "${pluginId}"? This cannot be undone.`)) return;
+
+            try {
+                const resp = await fetch(`/api/actions/${pluginId}`, { method: 'DELETE' });
+                const result = await resp.json();
+
+                if (result.status === 'deleted') {
+                    loadActions();
+                } else {
+                    alert('Error: ' + (result.error || 'Unknown error'));
+                }
+            } catch (err) {
+                console.error('Delete failed:', err);
+                alert('Failed to delete plugin');
+            }
+        }
+
+        // Export Plugin - show SHA before download
+        async function exportPlugin(pluginId) {
+            try {
+                // First get the SHA
+                const shaResp = await fetch(`/api/actions/${pluginId}/sha`);
+                const shaData = await shaResp.json();
+
+                if (shaData.error) {
+                    alert('Error: ' + shaData.error);
+                    return;
+                }
+
+                // Show SHA to user
+                const sha = shaData.sha256;
+                alert(`Plugin SHA-256:\n${sha}\n\nCopy this to verify authenticity when sharing.`);
+
+                // Then download
+                window.location.href = `/api/actions/${pluginId}/export`;
+            } catch (err) {
+                console.error('Export failed:', err);
+                window.location.href = `/api/actions/${pluginId}/export`;
+            }
+        }
+
+        // Install Plugin with optional SHA verification
+        async function installPlugin(input) {
+            if (!input.files.length) return;
+
+            // Prompt for SHA (optional)
+            const expectedSha = prompt('Enter SHA-256 to verify (leave empty to skip verification):', '');
+
+            const formData = new FormData();
+            formData.append('file', input.files[0]);
+            formData.append('scope', userRole === 'admin' ? 'system' : 'user');
+            if (expectedSha && expectedSha.trim()) {
+                formData.append('sha', expectedSha.trim());
+            }
+
+            try {
+                const resp = await fetch('/api/actions/install', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await resp.json();
+
+                if (result.status === 'installed') {
+                    alert(`Plugin "${result.plugin_id}" installed successfully!\n\nSHA-256: ${result.sha256}`);
+                    loadActions();
+                } else {
+                    alert('Error: ' + (result.error || 'Unknown error'));
+                }
+            } catch (err) {
+                console.error('Install failed:', err);
+                alert('Failed to install plugin');
+            }
+
+            input.value = '';
+        }
+
+        loadActions();
+    </script>
+</body>
+
+</html>

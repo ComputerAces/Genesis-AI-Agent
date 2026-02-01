@@ -1,0 +1,27 @@
+{
+    "name": "Search Files",
+    "id": "search_files",
+    "version": "1.0.0",
+    "description": "Searches for files by partial name match and returns their paths.",
+    "author": "Genesis",
+    "actions": [
+        {
+            "name": "search_files",
+            "description": "Finds files matching the query string in the filename.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Partial filename to search for"
+                    }
+                },
+                "required": [
+                    "query"
+                ]
+            },
+            "script": "main.py",
+            "trigger": "manual"
+        }
+    ]
+}

@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genesis - Admin Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .admin-wrap {
+            padding: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            padding: 2rem;
+            box-shadow: var(--shadow);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1.5rem;
+        }
+
+        th {
+            text-align: left;
+            padding: 1rem;
+            border-bottom: 2px solid var(--border);
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        td {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            background: var(--glass);
+            color: var(--accent);
+            border: 1px solid var(--border);
+            text-transform: capitalize;
+        }
+
+        .btn {
+            padding: 0.6rem 1.2rem;
+            border-radius: 0.75rem;
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 500;
+            transition: var(--transition);
+        }
+
+        .btn-add {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-add:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+        }
+
+        .btn-delete {
+            background: rgba(239, 68, 68, 0.1);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .btn-delete:hover {
+            background: #ef4444;
+            color: white;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(8px);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: var(--bg-sidebar);
+            padding: 2.5rem;
+            border-radius: 24px;
+            width: 100%;
+            max-width: 450px;
+            border: 1px solid var(--border);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        h2 {
+            margin-bottom: 1.5rem;
+            font-family: 'Outfit';
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 0.8rem 1rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            color: var(--text-main);
+            margin-bottom: 1.25rem;
+            outline: none;
+            transition: var(--transition);
+        }
+
+        input:focus,
+        select:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+        }
+    </style>
+</head>
+
+<body data-theme="dark">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <span class="logo-text">Genesis Admin</span>
+            <div style="display:flex; gap: 1rem; align-items:center;">
+                <div class="theme-toggle" id="theme-toggle"
+                    style="margin:0; padding:0.5rem; background:none; cursor:pointer;">
+                    <i class="fas fa-moon" id="theme-icon"></i>
+                </div>
+            </div>
+        </div>
+
+        <nav class="nav-links">
+            <a href="/" class="nav-item">
+                <i class="fas fa-comment-dots"></i>
+                <span>Chat</span>
+            </a>
+            <a href="/manage-chats" class="nav-item">
+                <i class="fas fa-history"></i>
+                <span>Manage Chats</span>
+            </a>
+            <div class="nav-item active">
+                <i class="fas fa-user-shield"></i>
+                <span>Users</span>
+            </div>
+            <a href="/admin/history" class="nav-item">
+                <i class="fas fa-database"></i>
+                <span>Global History</span>
+            </a>
+            <a href="/settings" class="nav-item">
+                <i class="fas fa-cog"></i>
+                <span>Settings</span>
+            </a>
+            <a href="/logout" class="nav-item" style="margin-top: auto; color: #fca5a5;">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Logout</span>
+            </a>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+        <div class="admin-wrap">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                    <h1 style="font-family: 'Outfit';">User Management</h1>
+                    <button class="btn btn-add" onclick="showModal()">+ Add User</button>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="userTable">
+                            <!-- Users loaded via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <h2>Add New User</h2>
+            <input type="text" id="newUsername" placeholder="Username">
+            <input type="password" id="newPassword" placeholder="Password">
+            <input type="email" id="newEmail" placeholder="Email">
+            <select id="newRole">
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+            </select>
+            <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1rem;">
+                <button class="btn" style="background:var(-- glass); color:var(--text-main);"
+                    onclick="hideModal()">Cancel</button>
+                <button class="btn btn-add" onclick="addUser()">Save User</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const themeToggle = document.getElementById('theme-toggle');
+        const themeIcon = document.getElementById('theme-icon');
+
+        if (themeToggle) {
+            themeToggle.addEventListener('click', () => {
+                const currentTheme = document.body.getAttribute('data-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                document.body.setAttribute('data-theme', newTheme);
+                themeIcon.className = newTheme === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+                localStorage.setItem('theme', newTheme);
+            });
+        }
+
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        document.body.setAttribute('data-theme', savedTheme);
+        if (themeIcon) {
+            themeIcon.className = savedTheme === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+        }
+
+        async function loadUsers() {
+            try {
+                const res = await fetch('/api/admin/users');
+                const users = await res.json();
+                const table = document.getElementById('userTable');
+                if (table) {
+                    table.innerHTML = users.map(u => `
+                        <tr>
+                            <td><strong style="color:var(--accent)">${u.username}</strong></td>
+                            <td>${u.email || '-'}</td>
+                            <td><span class="badge">${u.role}</span></td>
+                            <td>
+                                <button class="btn btn-delete" onclick="deleteUser(${u.id})">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error("Failed to load users:", e);
+            }
+        }
+
+        function showModal() { document.getElementById('modal').style.display = 'flex'; }
+        function hideModal() { document.getElementById('modal').style.display = 'none'; }
+
+        async function addUser() {
+            const data = {
+                action: 'add',
+                username: document.getElementById('newUsername').value,
+                password: document.getElementById('newPassword').value,
+                email: document.getElementById('newEmail').value,
+                role: document.getElementById('newRole').value
+            };
+            await fetch('/api/admin/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            hideModal();
+            loadUsers();
+        }
+
+        async function deleteUser(id) {
+            if (!confirm('Are you sure you want to delete this user?')) return;
+            await fetch('/api/admin/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'delete', id })
+            });
+            loadUsers();
+        }
+
+        loadUsers();
+    </script>
+</body>
+
+</html>

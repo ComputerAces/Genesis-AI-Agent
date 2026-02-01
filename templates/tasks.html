@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genesis - Tasks</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .task-page {
+            padding: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .task-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .task-header h1 {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+        }
+
+        .task-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .task-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            transition: var(--transition);
+        }
+
+        .task-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .task-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+
+        .task-title {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .task-status {
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-active {
+            background: #10b981;
+            color: white;
+        }
+
+        .status-paused {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .status-error {
+            background: #ef4444;
+            color: white;
+        }
+
+        .task-meta {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+        }
+
+        .task-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .task-btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: var(--transition);
+        }
+
+        .task-btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .task-btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .task-btn-secondary {
+            background: var(--bg-input);
+            color: var(--text-main);
+        }
+
+        .add-task-btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: var(--transition);
+        }
+
+        .add-task-btn:hover {
+            transform: scale(1.02);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 4rem;
+            color: var(--text-muted);
+        }
+
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .back-link {
+            color: var(--accent);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 500;
+        }
+    </style>
+</head>
+
+<body data-theme="dark">
+    <div class="task-page">
+        <div class="task-header">
+            <div style="display: flex; align-items: center; gap: 1.5rem;">
+                <a href="/" class="back-link"><i class="fas fa-arrow-left"></i> Back</a>
+                <h1><i class="fas fa-tasks" style="color: var(--accent);"></i> Task Manager</h1>
+            </div>
+            <button class="add-task-btn" onclick="showAddTaskModal()">
+                <i class="fas fa-plus"></i> Add Task
+            </button>
+        </div>
+
+        <div id="task-grid" class="task-grid">
+            <!-- Tasks loaded dynamically -->
+        </div>
+
+        <div id="empty-state" class="empty-state" style="display: none;">
+            <i class="fas fa-clipboard-list"></i>
+            <h2>No Tasks Yet</h2>
+            <p>Create a task to automate actions on a schedule.</p>
+        </div>
+    </div>
+
+    <script>
+        const taskGrid = document.getElementById('task-grid');
+        const emptyState = document.getElementById('empty-state');
+
+        // Load theme from storage
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        document.body.setAttribute('data-theme', savedTheme);
+
+        async function loadTasks() {
+            try {
+                const resp = await fetch('/api/tasks');
+                const tasks = await resp.json();
+
+                if (tasks.length === 0) {
+                    taskGrid.style.display = 'none';
+                    emptyState.style.display = 'block';
+                    return;
+                }
+
+                taskGrid.style.display = 'grid';
+                emptyState.style.display = 'none';
+                taskGrid.innerHTML = '';
+
+                tasks.forEach(task => {
+                    const card = document.createElement('div');
+                    card.className = 'task-card';
+
+                    const statusClass = task.status === 'active' ? 'status-active' :
+                        task.status === 'paused' ? 'status-paused' : 'status-error';
+
+                    card.innerHTML = `
+                        <div class="task-card-header">
+                            <div class="task-title">${task.name}</div>
+                            <span class="task-status ${statusClass}">${task.status}</span>
+                        </div>
+                        <div class="task-meta">
+                            <div><i class="fas fa-clock"></i> ${task.schedule || 'Manual'}</div>
+                            <div><i class="fas fa-plug"></i> ${task.action || 'N/A'}</div>
+                            <div><i class="fas fa-history"></i> Last run: ${task.last_run || 'Never'}</div>
+                        </div>
+                        <div class="task-actions">
+                            <button class="task-btn task-btn-primary" onclick="runTask('${task.id}')">
+                                <i class="fas fa-play"></i> Run
+                            </button>
+                            <button class="task-btn task-btn-secondary" onclick="editTask('${task.id}')">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                            <button class="task-btn task-btn-danger" onclick="deleteTask('${task.id}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    `;
+                    taskGrid.appendChild(card);
+                });
+            } catch (err) {
+                console.error('Failed to load tasks:', err);
+            }
+        }
+
+        async function runTask(taskId) {
+            await fetch(`/api/tasks/${taskId}/run`, { method: 'POST' });
+            loadTasks();
+        }
+
+        async function deleteTask(taskId) {
+            if (!confirm('Delete this task?')) return;
+            await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+            loadTasks();
+        }
+
+        function editTask(taskId) {
+            alert('Edit task: ' + taskId + ' (Coming soon)');
+        }
+
+        function showAddTaskModal() {
+            alert('Add task modal (Coming soon)');
+        }
+
+        // Initial load
+        loadTasks();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genesis AI - Chat</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body data-theme="dark">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <span class="logo-text">Genesis AI</span>
+            <div style="display:flex; gap: 1rem; align-items:center;">
+                <div class="theme-toggle" id="theme-toggle" style="margin:0; padding:0.5rem; background:none;">
+                    <i class="fas fa-moon" id="theme-icon"></i>
+                </div>
+                <button id="toggle-sidebar"
+                    style="background:none; border:none; color:var(--text-muted); cursor:pointer;">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+        </div>
+
+        <nav class="nav-links">
+            <a href="/" class="nav-item active">
+                <i class="fas fa-comment-dots"></i>
+                <span>Chat</span>
+            </a>
+            <a href="/bot" class="nav-item">
+                <i class="fas fa-robot"></i>
+                <span>My Bot</span>
+            </a>
+            <a href="/manage-chats" class="nav-item">
+                <i class="fas fa-history"></i>
+                <span>Manage Chats</span>
+            </a>
+            <a href="/actions" class="nav-item">
+                <i class="fas fa-plug"></i>
+                <span>Plugins</span>
+            </a>
+            <a href="/tasks" class="nav-item">
+                <i class="fas fa-tasks"></i>
+                <span>Tasks</span>
+            </a>
+            {% if user.role == 'admin' %}
+            <a href="/admin" class="nav-item">
+                <i class="fas fa-user-shield"></i>
+                <span>Admin</span>
+            </a>
+            <a href="/settings" class="nav-item">
+                <i class="fas fa-cog"></i>
+                <span>Settings</span>
+            </a>
+            {% endif %}
+            <a href="/logout" class="nav-item">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Logout</span>
+            </a>
+        </nav>
+
+        <div class="sidebar-section">
+            <div class="section-header">
+                <span>CONVERSATIONS</span>
+                <button id="new-chat-btn" title="New Chat"><i class="fas fa-plus"></i></button>
+            </div>
+            <div id="chat-list" class="chat-list">
+                <!-- Chats loaded via JS -->
+            </div>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="top-bar" style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="model-selector-wrap">
+                <i class="fas fa-robot" style="color:var(--accent); font-size:1.5rem;"></i>
+                <select id="model-select" class="model-select">
+                    <!-- Models loaded via JS -->
+                </select>
+            </div>
+
+            <div id="current-chat-title"
+                style="flex:1; text-align:center; margin:0 1rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                New Chat
+            </div>
+
+            <div class="controls" style="display: flex; gap: 1.5rem; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span class="toggle-label" style="font-size:0.8rem;">Thinking</span>
+                    <label class="switch">
+                        <input type="checkbox" id="thinking-toggle" {% if default_thinking %}checked{% endif %}>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span class="toggle-label" style="font-size:0.8rem;">Auto-Read</span>
+                    <label class="switch">
+                        <input type="checkbox" id="auto-read-toggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+        </header>
+
+        <div id="chat-container">
+            <div class="assistant message">
+                Hello! I am Genesis AI, loaded and ready. How can I assist you today?
+            </div>
+        </div>
+
+        <!-- Thinking View -->
+        <div class="thinking-view minimized" id="thinking-view">
+            <div class="thinking-view-header">
+                <span><i class="fas fa-microchip"></i> THOUGHT PROCESS</span>
+                <button id="toggle-thinking-btn"
+                    style="background:none; border:none; color:var(--text-muted); cursor:pointer;">
+                    <i class="fas fa-expand-alt"></i>
+                </button>
+            </div>
+            <div id="thinking-text"></div>
+        </div>
+
+        <div class="input-area">
+            <div class="input-wrapper">
+                <button id="mic-btn" title="Voice input (hold Space to record)"
+                    style="background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0.5rem; font-size: 1.2rem;">
+                    <i class="fas fa-microphone"></i>
+                </button>
+                <textarea id="user-input" placeholder="Message Genesis AI..." rows="1"></textarea>
+                <button id="send-btn">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const chatContainer = document.getElementById('chat-container');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const thinkingToggle = document.getElementById('thinking-toggle');
+        const autoReadToggle = document.getElementById('auto-read-toggle');
+        const thinkingView = document.getElementById('thinking-view');
+        const thinkingText = document.getElementById('thinking-text');
+        const modelSelect = document.getElementById('model-select');
+        const sidebar = document.getElementById('sidebar');
+        const toggleSidebarBtn = document.getElementById('toggle-sidebar');
+        const themeToggle = document.getElementById('theme-toggle');
+        const themeIcon = document.getElementById('theme-icon');
+        const chatList = document.getElementById('chat-list');
+        const newChatBtn = document.getElementById('new-chat-btn');
+
+        // Tab Isolation - Persist across link clicks in same session
+        let tabId = sessionStorage.getItem('tabId');
+        if (!tabId) {
+            tabId = Math.random().toString(36).substring(7);
+            sessionStorage.setItem('tabId', tabId);
+        }
+
+        let currentChatId = localStorage.getItem('lastChatId');
+
+        const toggleThinkingBtn = document.getElementById('toggle-thinking-btn');
+
+        // Thinking View Toggle
+        toggleThinkingBtn.addEventListener('click', () => {
+            const isMinimized = thinkingView.classList.toggle('minimized');
+            if (isMinimized) {
+                toggleThinkingBtn.innerHTML = '<i class="fas fa-expand-alt"></i>';
+            } else {
+                toggleThinkingBtn.innerHTML = '<i class="fas fa-compress-alt"></i>';
+            }
+        });
+
+        // Sidebar & Theme Init
+        toggleSidebarBtn.addEventListener('click', () => sidebar.classList.toggle('collapsed'));
+
+        themeToggle.addEventListener('click', () => {
+            const currentTheme = document.body.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.body.setAttribute('data-theme', newTheme);
+            themeIcon.className = newTheme === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+            localStorage.setItem('theme', newTheme);
+        });
+
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        document.body.setAttribute('data-theme', savedTheme);
+        themeIcon.className = savedTheme === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+
+        // Load Toggle States
+        const savedThinking = localStorage.getItem('useThinking');
+        if (savedThinking !== null) {
+            thinkingToggle.checked = (savedThinking === 'true');
+        }
+
+        const savedAutoRead = localStorage.getItem('autoRead');
+        if (savedAutoRead !== null) {
+            autoReadToggle.checked = (savedAutoRead === 'true');
+        }
+
+        thinkingToggle.addEventListener('change', () => {
+            localStorage.setItem('useThinking', thinkingToggle.checked);
+        });
+
+        autoReadToggle.addEventListener('change', () => {
+            localStorage.setItem('autoRead', autoReadToggle.checked);
+        });
+
+        // Load History
+        async function loadHistory() {
+            // 1. Aggressively clear UI state BEFORE fetching to prevent "ghosting"
+            chatContainer.innerHTML = '';
+            thinkingText.textContent = '';
+            thinkingText.style.opacity = '1';
+            thinkingView.classList.add('minimized');
+            toggleThinkingBtn.innerHTML = '<i class="fas fa-expand-alt"></i>';
+
+            try {
+                const resp = await fetch(`/api/history?tab_id=${tabId}${currentChatId ? `&chat_id=${currentChatId}` : ''}`);
+                const history = await resp.json();
+
+                if (history && history.length > 0) {
+                    history.forEach(m => {
+                        let content = m.content;
+                        let reason = null;
+
+                        // Try to parse JSON if it looks like a JSON block
+                        if (m.role === 'assistant') {
+                            try {
+                                // Extract JSON if wrapped in markdown
+                                const jsonMatch = content.match(/\{[\s\S]*\}/);
+                                if (jsonMatch) {
+                                    const parsed = JSON.parse(jsonMatch[0]);
+                                    if (parsed.message) {
+                                        content = parsed.message;
+                                        reason = parsed.reason;
+                                    }
+                                } else if (content.trim().startsWith('{')) {
+                                    // Fallback simple check
+                                    const parsed = JSON.parse(content);
+                                    content = parsed.message || content;
+                                    reason = parsed.reason;
+                                }
+                            } catch (e) {
+                                // Failed to parse, show raw content
+                            }
+                        }
+
+                        const msgDiv = addMessage(content, m.role);
+                        if (m.thinking) {
+                            msgDiv.dataset.thinking = m.thinking;
+                        }
+                        if (reason) {
+                            const reasonDiv = document.createElement('div');
+                            reasonDiv.className = 'reason-box';
+                            reasonDiv.innerHTML = `<i class="fas fa-info-circle"></i> <strong>Reason:</strong> ${reason}`;
+                            msgDiv.appendChild(reasonDiv);
+                        }
+                    });
+
+                    // If last message is Assistant and has thinking, show it in the thinking view
+                    const lastMsg = history[history.length - 1];
+                    if (lastMsg.role === 'assistant' && lastMsg.thinking) {
+                        thinkingView.classList.remove('minimized');
+                        toggleThinkingBtn.innerHTML = '<i class="fas fa-compress-alt"></i>';
+                        thinkingText.textContent = lastMsg.thinking;
+                        thinkingText.style.opacity = '0.7';
+                        thinkingView.scrollTop = thinkingView.scrollHeight;
+                    }
+
+                    // Auto-scroll to bottom of chat
+                    requestAnimationFrame(() => {
+                        chatContainer.scrollTop = chatContainer.scrollHeight;
+                    });
+                } else {
+                    // History is empty -> New Chat
+                    // Fetch bot config to get dynamic name
+                    try {
+                        const [settingsResp, botResp] = await Promise.all([
+                            fetch('/api/settings'),
+                            fetch('/api/bot')
+                        ]);
+                        const settings = await settingsResp.json();
+                        const botConfig = await botResp.json();
+
+                        const botName = botConfig.name || "Genesis AI";
+                        let msg = (settings.server && settings.server.welcome_message)
+                            ? settings.server.welcome_message
+                            : "Hello! I am [bot_name]. How can I assist you today?";
+
+                        msg = msg.replace("[bot_name]", botName);
+                        addMessage(msg, "assistant");
+                    } catch (err) {
+                        console.warn("Config fetch failed, using default", err);
+                        addMessage("Hello! I am Genesis AI. How can I assist you today?", "assistant");
+                    }
+                }
+            } catch (err) {
+                console.error("Error loading history:", err);
+                addMessage("Error loading chat history. Please try refreshing.", "system");
+            }
+        }
+
+        async function loadChats() {
+            const resp = await fetch('/api/chats');
+            const chats = await resp.json();
+            chatList.innerHTML = '';
+
+            // Track if we found the active chat to set the title
+            let activeChatFound = false;
+            const titleBanner = document.getElementById('current-chat-title');
+
+            chats.forEach(c => {
+                const isActive = (currentChatId === c.id);
+                if (isActive) {
+                    activeChatFound = true;
+                    if (titleBanner) titleBanner.textContent = c.title || "Untitled Chat";
+                }
+
+                const div = document.createElement('div');
+                div.className = `chat-item ${isActive ? 'active' : ''}`;
+
+                // Format relative time (e.g. "Just now", "2 hours ago")
+                const updatedTime = new Date(c.updated_at || c.created_at || Date.now());
+                const timeStr = updatedTime.toLocaleDateString() + ' ' + updatedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                div.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                        <div style="display:flex; align-items:center; overflow:hidden;">
+                            <i class="fas fa-comment-alt" style="margin-right:8px;"></i> 
+                            <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${c.title || 'Untitled Chat'}</span>
+                        </div>
+                    </div>
+                    <div style="font-size:0.75rem; opacity:0.6; margin-left:24px; margin-top:2px;">
+                        ${timeStr}
+                    </div>
+                `;
+                div.onclick = () => selectChat(c.id);
+                chatList.appendChild(div);
+            });
+
+            // If no active chat but chats exist, pick the first one
+            if (!currentChatId && chats.length > 0) {
+                selectChat(chats[0].id);
+            } else if (!activeChatFound && currentChatId) {
+                // If we have an ID for a new empty chat, set default title
+                if (titleBanner) titleBanner.textContent = "New Conversation";
+            }
+        }
+
+        async function createNewChat() {
+            const resp = await fetch('/api/chats', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: "New Conversation" })
+            });
+            const result = await resp.json();
+            if (result.chat_id) {
+                selectChat(result.chat_id);
+            }
+        }
+
+        function selectChat(chatId) {
+            currentChatId = chatId;
+            localStorage.setItem('lastChatId', chatId);
+
+            // Clear UI immediately to prevent "old history" ghosting
+            chatContainer.innerHTML = '';
+            thinkingText.textContent = '';
+            thinkingText.style.opacity = '1';
+            thinkingView.classList.add('minimized');
+            toggleThinkingBtn.innerHTML = '<i class="fas fa-expand-alt"></i>';
+
+            loadChats();
+            loadHistory();
+        }
+
+        newChatBtn.onclick = createNewChat;
+
+        async function resumeChatStream() {
+            // Attempt to join an existing stream if active
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: "", // Empty means resubscribe
+                        use_thinking: thinkingToggle.checked,
+                        model_id: modelSelect.value,
+                        tab_id: tabId,
+                        chat_id: currentChatId
+                    })
+                });
+
+                if (response.status === 200) {
+                    // Check content type to see if it's JSON (info) or Stream
+                    const contentType = response.headers.get("content-type");
+                    if (contentType && contentType.includes("application/json")) {
+                        const data = await response.json();
+                        if (data.status === "no_active_stream") {
+                            console.log("[Resume] No active stream to join.");
+                            return;
+                        }
+                    }
+                    console.log("[Resume] Resubscribing to active stream...");
+                    handleChatStream(response);
+                } else {
+                    console.warn("[Resume] Unexpected status:", response.status);
+                }
+            } catch (err) {
+                console.log("[Resume] Network error checking for stream:", err);
+            }
+        }
+
+        async function init() {
+            const resp = await fetch('/api/settings');
+            const settings = await resp.json();
+
+            settings.models.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.id;
+                opt.textContent = m.id;
+                if (m.id === settings.active_model) opt.selected = true;
+                modelSelect.appendChild(opt);
+            });
+
+            modelSelect.onchange = async () => {
+                settings.active_model = modelSelect.value;
+                await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(settings)
+                });
+            };
+
+            loadChats();
+            loadHistory();
+            resumeChatStream();
+        }
+
+        userInput.addEventListener('input', () => {
+            userInput.style.height = 'auto';
+            userInput.style.height = (userInput.scrollHeight) + 'px';
+        });
+
+        async function handleChatStream(response) {
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let assistantMsgDiv = null;
+
+            // Capture the chat ID that this stream intends to serve
+            const streamChatId = currentChatId;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                // GUARD: If user switched chats, abort this stream processing
+                if (currentChatId !== streamChatId) {
+                    console.log("[Stream] Chat switched, aborting stream for previous chat.");
+                    // We can't easily "cancel" the fetch reader without AbortController, but we can stop updating UI
+                    reader.cancel();
+                    break;
+                }
+
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n');
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        let data;
+                        try {
+                            data = JSON.parse(line.substring(6));
+                        } catch (e) { continue; }
+
+                        if (data.status === 'thinking') {
+                            thinkingView.classList.remove('minimized');
+                            toggleThinkingBtn.innerHTML = '<i class="fas fa-compress-alt"></i>';
+
+                            // Double-word Fix:
+                            // Grab tail of existing text + new chunk
+                            const contextLen = 50;
+                            const currentText = thinkingText.textContent;
+                            const prefix = currentText.slice(-contextLen);
+                            const combined = prefix + data.chunk;
+
+                            // Punctuation-aware check: split by space and compare last two tokens
+                            let processed = combined;
+                            const parts = processed.trim().split(/\s+/);
+                            if (parts.length >= 2) {
+                                const last = parts[parts.length - 1];
+                                const secondLast = parts[parts.length - 2];
+
+                                if (last && secondLast && last === secondLast) {
+                                    const escaped = last.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                                    // Match (Space/Start) + Word + Spaces + Word + (TrailingSpaces/End)
+                                    const re = new RegExp(`(\\s|^)${escaped}\\s+${escaped}(\\s*)$`);
+                                    if (re.test(processed)) {
+                                        // Restore the leading space ($1) and trailing space ($2)
+                                        processed = processed.replace(re, (match, p1, p2) => p1 + last + p2);
+                                    }
+                                }
+                            }
+
+                            if (currentText.length >= contextLen) {
+                                thinkingText.textContent = currentText.slice(0, -contextLen) + processed;
+                            } else {
+                                thinkingText.textContent = processed;
+                            }
+
+                            requestAnimationFrame(() => {
+                                thinkingView.scrollTop = thinkingView.scrollHeight;
+                            });
+                        } else if (data.status === 'thinking_finished') {
+                            thinkingText.style.opacity = '0.7';
+                        } else if (data.status === 'content') {
+                            if (!assistantMsgDiv) {
+                                const last = chatContainer.lastElementChild;
+                                if (last && last.classList.contains('assistant') && !last.dataset.finished) {
+                                    assistantMsgDiv = last;
+                                } else {
+                                    assistantMsgDiv = addMessage('', 'assistant');
+                                }
+                            }
+
+                            // Show "Building..." status (suppress partial text)
+                            if (!assistantMsgDiv.dataset.building) {
+                                assistantMsgDiv.innerHTML = '<i class="fas fa-tools"></i> Building...';
+                                assistantMsgDiv.dataset.building = "true";
+                                chatContainer.scrollTop = chatContainer.scrollHeight;
+                            }
+                        } else if (data.status === 'json_content') {
+                            if (!assistantMsgDiv) {
+                                const last = chatContainer.lastElementChild;
+                                if (last && last.classList.contains('assistant')) assistantMsgDiv = last;
+                                else assistantMsgDiv = addMessage('', 'assistant');
+                            }
+
+                            // Render Final Content
+                            assistantMsgDiv.innerHTML = '';
+                            delete assistantMsgDiv.dataset.building;
+
+                            // Check for widget
+                            const text = data.message;
+                            let rendered = false;
+
+                            if (text && text.includes('"type"')) {
+                                try {
+                                    const jsonMatch = text.match(/\{[\s\S]*"type"\s*:\s*"(table|card|list|json)"[\s\S]*\}/);
+                                    if (jsonMatch) {
+                                        const widgetData = JSON.parse(jsonMatch[0]);
+                                        const widget = renderWidget(widgetData);
+                                        assistantMsgDiv.appendChild(widget);
+                                        rendered = true;
+                                    }
+                                } catch (e) { }
+                            }
+
+                            if (!rendered) {
+                                assistantMsgDiv.textContent = text;
+                            }
+
+                            assistantMsgDiv.dataset.finished = "true";
+
+                            // Add play button and trigger auto-read
+                            const messageText = data.message || assistantMsgDiv.textContent;
+                            if (typeof addPlayButton === 'function') {
+                                addPlayButton(assistantMsgDiv, messageText);
+                            }
+                            if (autoReadToggle && autoReadToggle.checked && typeof speakText === 'function') {
+                                speakText(messageText);
+                            }
+
+                            if (!assistantMsgDiv.querySelector('.reason-box') && data.reason) {
+                                const reasonDiv = document.createElement('div');
+                                reasonDiv.className = 'reason-box';
+                                reasonDiv.innerHTML = `<i class="fas fa-info-circle"></i> <strong>Reason:</strong> ${data.reason}`;
+                                assistantMsgDiv.appendChild(reasonDiv);
+                            }
+
+                            // Check for dynamic title update
+                            if (data.json && data.json.chat_title) {
+                                const titleBanner = document.getElementById('current-chat-title');
+                                if (titleBanner) titleBanner.textContent = data.json.chat_title;
+                                loadChats(); // Refresh sidebar
+                            }
+
+                            chatContainer.scrollTop = chatContainer.scrollHeight;
+                            assistantMsgDiv = null;
+                        } else if (data.status === 'error') {
+                            // Try to replace the "Asking..." placeholder if it exists
+                            if (!assistantMsgDiv) {
+                                const last = chatContainer.lastElementChild;
+                                if (last && last.classList.contains('assistant') && !last.dataset.finished) {
+                                    assistantMsgDiv = last;
+                                }
+                            }
+
+                            if (assistantMsgDiv) {
+                                assistantMsgDiv.firstChild.textContent = 'Error: ' + data.error;
+                                assistantMsgDiv.dataset.finished = "true";
+                                assistantMsgDiv = null;
+                            } else {
+                                addMessage('Error: ' + data.error, 'assistant');
+                            }
+                        } else if (data.status === 'new_chat_id') {
+                            // If the server assigns a new ID (e.g. for a previously unsaved new chat), update context
+                            // But only if we are still looking at that "new chat"
+                            if (currentChatId === streamChatId) {
+                                currentChatId = data.chat_id;
+                                localStorage.setItem('lastChatId', currentChatId);
+                                loadChats();
+                            }
+                        } else if (data.status === 'chat_title_updated') {
+                            loadChats(); // Refresh list to show updated title
+                        } else if (data.status === 'action_loop') {
+                            // Update "Building..." status to show progress
+                            const loopNum = data.loop || 1;
+                            const maxLoops = data.max_loops || 5;
+
+                            if (assistantMsgDiv) {
+                                // If in "Building" mode, update the text
+                                if (assistantMsgDiv.dataset.building) {
+                                    assistantMsgDiv.innerHTML = `<i class="fas fa-sync-alt fa-spin"></i> Processing Action Chain (Step ${loopNum}/${maxLoops})...`;
+                                } else {
+                                    // If we are appending to existing content (rare in Building mode but possible)
+                                    let loopIndicator = assistantMsgDiv.querySelector('.loop-indicator');
+                                    if (!loopIndicator) {
+                                        loopIndicator = document.createElement('div');
+                                        loopIndicator.className = 'loop-indicator';
+                                        loopIndicator.style.cssText = 'font-size:0.75rem;color:var(--accent);margin-top:0.5rem;padding:0.25rem 0.5rem;background:rgba(var(--accent-rgb),0.1);border-radius:0.25rem;display:inline-block;';
+                                        assistantMsgDiv.appendChild(loopIndicator);
+                                    }
+                                    loopIndicator.innerHTML = `<i class="fas fa-sync-alt fa-spin"></i> Action Loop: ${loopNum}/${maxLoops}`;
+                                }
+                            }
+                        } else if (data.status === 'action_output') {
+                            // Show action execution result
+                            const actionName = data.action_name || 'action';
+                            const actionStatus = data.action_status || 'unknown';
+                            const output = data.output || '';
+                            const statusIcon = actionStatus === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+                            const statusColor = actionStatus === 'success' ? '#28a745' : '#dc3545';
+
+                            if (assistantMsgDiv) {
+                                const outputDiv = document.createElement('div');
+                                outputDiv.className = 'action-output';
+                                outputDiv.innerHTML = `
+                                        <div style="font-weight:600;margin-bottom:0.25rem;"><i class="fas ${statusIcon}" style="color:${statusColor}"></i> Action Output: ${actionName}</div>
+                                        <pre style="margin:0;white-space:pre-wrap;font-family:'JetBrains Mono',monospace;font-size:0.85rem;max-height:200px;overflow-y:auto;background:rgba(0,0,0,0.2);padding:0.5rem;border-radius:0.25rem;">${output}</pre>
+                                    `;
+                                assistantMsgDiv.appendChild(outputDiv);
+                            }
+                        } else if (data.status === 'permission_required') {
+                            showPermissionModal(data);
+                        }
+                    }
+                }
+            }
+        }
+
+
+
+
+        async function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text) return;
+
+            addMessage(text, 'user');
+            // Show "Asking ..." placeholder immediately
+            addMessage("Asking ...", "assistant");
+
+            userInput.value = '';
+            userInput.style.height = 'auto';
+
+            if (thinkingToggle.checked) {
+                thinkingView.classList.remove('minimized');
+                toggleThinkingBtn.innerHTML = '<i class="fas fa-compress-alt"></i>';
+                thinkingText.textContent = '';
+                thinkingText.style.opacity = '1';
+            }
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: text,
+                        use_thinking: thinkingToggle.checked,
+                        model_id: modelSelect.value,
+                        return_json: true,
+                        tab_id: tabId,
+                        chat_id: currentChatId
+                    })
+                });
+                await handleChatStream(response);
+            } catch (err) {
+                console.error(err);
+                addMessage('Communication error occurred.', 'assistant');
+            }
+        }
+
+        function renderWidget(widgetData) {
+            // Render structured JSON as HTML widget
+            const container = document.createElement('div');
+            container.className = 'widget-container';
+
+            const type = widgetData.type || 'json';
+
+            if (type === 'table' && widgetData.rows) {
+                // Render as table
+                const table = document.createElement('table');
+                table.className = 'widget-table';
+
+                if (widgetData.headers) {
+                    const thead = document.createElement('thead');
+                    const tr = document.createElement('tr');
+                    widgetData.headers.forEach(h => {
+                        const th = document.createElement('th');
+                        th.textContent = h;
+                        tr.appendChild(th);
+                    });
+                    thead.appendChild(tr);
+                    table.appendChild(thead);
+                }
+
+                const tbody = document.createElement('tbody');
+                widgetData.rows.forEach(row => {
+                    const tr = document.createElement('tr');
+                    row.forEach(cell => {
+                        const td = document.createElement('td');
+                        td.textContent = cell;
+                        tr.appendChild(td);
+                    });
+                    tbody.appendChild(tr);
+                });
+                table.appendChild(tbody);
+                container.appendChild(table);
+
+            } else if (type === 'card') {
+                // Render as card
+                const card = document.createElement('div');
+                card.className = 'widget-card';
+
+                if (widgetData.title) {
+                    const title = document.createElement('div');
+                    title.className = 'widget-card-title';
+                    title.textContent = widgetData.title;
+                    card.appendChild(title);
+                }
+
+                if (widgetData.fields) {
+                    widgetData.fields.forEach(field => {
+                        const row = document.createElement('div');
+                        row.className = 'widget-card-field';
+                        row.innerHTML = `<strong>${field.label}:</strong> ${field.value}`;
+                        card.appendChild(row);
+                    });
+                }
+                container.appendChild(card);
+
+            } else if (type === 'list') {
+                // Render as list
+                const ul = document.createElement('ul');
+                ul.className = 'widget-list';
+                (widgetData.items || []).forEach(item => {
+                    const li = document.createElement('li');
+                    li.textContent = item;
+                    ul.appendChild(li);
+                });
+                container.appendChild(ul);
+
+            } else {
+                // Default: JSON display
+                const pre = document.createElement('pre');
+                pre.className = 'widget-json';
+                pre.textContent = JSON.stringify(widgetData, null, 2);
+                container.appendChild(pre);
+            }
+
+            return container;
+        }
+
+        function addMessage(text, role) {
+            const div = document.createElement('div');
+            div.className = `${role} message`;
+
+            // Check if message contains a widget block
+            if (role === 'assistant' && text.includes('"type"')) {
+                try {
+                    // Try to find and parse JSON widget blocks
+                    const jsonMatch = text.match(/\{[\s\S]*"type"\s*:\s*"(table|card|list|json)"[\s\S]*\}/);
+                    if (jsonMatch) {
+                        const widgetData = JSON.parse(jsonMatch[0]);
+                        const widget = renderWidget(widgetData);
+                        div.appendChild(widget);
+
+                        // Add any text before/after the widget
+                        const beforeText = text.substring(0, text.indexOf(jsonMatch[0])).trim();
+                        const afterText = text.substring(text.indexOf(jsonMatch[0]) + jsonMatch[0].length).trim();
+
+                        if (beforeText) {
+                            const beforeSpan = document.createElement('span');
+                            beforeSpan.style.whiteSpace = 'pre-wrap';
+                            beforeSpan.textContent = beforeText;
+                            div.insertBefore(beforeSpan, div.firstChild);
+                        }
+                        if (afterText) {
+                            const afterSpan = document.createElement('span');
+                            afterSpan.style.whiteSpace = 'pre-wrap';
+                            afterSpan.textContent = afterText;
+                            div.appendChild(afterSpan);
+                        }
+
+                        chatContainer.appendChild(div);
+                        chatContainer.scrollTop = chatContainer.scrollHeight;
+                        return div;
+                    }
+                } catch (e) {
+                    // Not a valid widget, render as text
+                }
+            }
+
+            const contentSpan = document.createElement('span');
+            contentSpan.style.whiteSpace = 'pre-wrap';
+            contentSpan.textContent = text;
+            div.appendChild(contentSpan);
+            chatContainer.appendChild(div);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            return div;
+        }
+
+        async function clearHistory() {
+            await fetch('/api/history/clear', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tab_id: tabId })
+            });
+            chatContainer.innerHTML = '';
+            console.log('History cleared for tab:', tabId);
+        }
+
+        sendBtn.addEventListener('click', sendMessage);
+        userInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // ========================================
+        // VOICE CHAT: TTS & STT
+        // ========================================
+
+        // const autoReadToggle = document.getElementById('auto-read-toggle');
+        const micBtn = document.getElementById('mic-btn');
+        let speechSynth = window.speechSynthesis;
+        let recognition = null;
+        let isRecording = false;
+
+        // Text-to-Speech function
+        function speakText(text) {
+            if (!speechSynth) return;
+            speechSynth.cancel();
+
+            let cleanText = text
+                .replace(/```[\s\S]*?```/g, '')
+                .replace(/\*\*(.*?)\*\*/g, '$1')
+                .replace(/\*(.*?)\*/g, '$1')
+                .replace(/`(.*?)`/g, '$1')
+                .replace(/\[.*?\]\(.*?\)/g, '')
+                .replace(/#{1,6}\s/g, '')
+                .trim();
+
+            if (!cleanText) return;
+
+            const utterance = new SpeechSynthesisUtterance(cleanText);
+            utterance.rate = 1.0;
+            speechSynth.speak(utterance);
+        }
+
+        // Add play button to message
+        function addPlayButton(messageDiv, text) {
+            const playBtn = document.createElement('button');
+            playBtn.className = 'play-btn';
+            playBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
+            playBtn.title = 'Read aloud';
+            playBtn.style.cssText = 'position:absolute;top:0.5rem;right:0.5rem;background:var(--accent);border:none;color:white;cursor:pointer;padding:0.3rem 0.5rem;border-radius:0.4rem;font-size:0.75rem;opacity:0.7;';
+            playBtn.onclick = (e) => { e.stopPropagation(); speakText(text); };
+            messageDiv.style.position = 'relative';
+            messageDiv.appendChild(playBtn);
+        }
+
+        // Speech Recognition
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+
+            recognition.onstart = () => {
+                isRecording = true;
+                micBtn.innerHTML = '<i class="fas fa-microphone" style="color:var(--accent);"></i>';
+            };
+
+            recognition.onend = () => {
+                isRecording = false;
+                micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+            };
+
+            recognition.onresult = (event) => {
+                let transcript = '';
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    transcript += event.results[i][0].transcript;
+                }
+                userInput.value = transcript;
+            };
+        }
+
+        micBtn.addEventListener('click', () => {
+            if (!recognition) { alert('Speech recognition not supported.'); return; }
+            if (isRecording) recognition.stop(); else recognition.start();
+        });
+
+        // Space bar hold-to-record
+        let spaceHeld = false;
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && !spaceHeld && document.activeElement !== userInput) {
+                spaceHeld = true;
+                if (recognition && !isRecording) recognition.start();
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (e.code === 'Space' && spaceHeld) {
+                spaceHeld = false;
+                if (recognition && isRecording) {
+                    recognition.stop();
+                    setTimeout(() => { if (userInput.value.trim()) sendMessage(); }, 500);
+                }
+            }
+        });
+
+        init();
+    </script>
+
+    <!-- Permission Modal -->
+    <div id="permission-modal"
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:2000; align-items:center; justify-content:center;">
+        <div
+            style="background:var(--bg-secondary); width:90%; max-width:500px; padding:2rem; border-radius:1rem; border:1px solid var(--border-color); box-shadow:0 10px 25px rgba(0,0,0,0.5);">
+            <div style="text-align:center; margin-bottom:1.5rem;">
+                <i class="fas fa-shield-alt" style="font-size:3rem; color:var(--accent); margin-bottom:1rem;"></i>
+                <h2 style="margin:0; font-size:1.5rem;">Action Permission Required</h2>
+                <p style="opacity:0.8; margin-top:0.5rem;" id="perm-action-desc">The AI wants to execute an action.</p>
+            </div>
+
+            <div
+                style="background:var(--bg-primary); padding:1rem; border-radius:0.5rem; font-family:'JetBrains Mono', monospace; font-size:0.85rem; margin-bottom:1.5rem; border:1px solid var(--border-color); overflow-x:auto;">
+                <span style="color:var(--accent); font-weight:600;" id="perm-action-name">action_name</span>
+                <pre id="perm-action-args"
+                    style="margin:0.5rem 0 0 0; color:var(--text-secondary); white-space:pre-wrap;"></pre>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">
+                <button class="perm-btn" onclick="handlePermission('once')">Allow Once</button>
+                <button class="perm-btn" onclick="handlePermission('session')">Allow for This Chat</button>
+                <button class="perm-btn" onclick="handlePermission('today')">Allow for Today</button>
+                <button class="perm-btn" onclick="handlePermission('always')"
+                    style="border-color:var(--accent); color:var(--accent);">Always Allow</button>
+            </div>
+
+            <button onclick="handlePermission('deny')"
+                style="width:100%; margin-top:0.75rem; padding:0.75rem; background:transparent; border:1px solid #ff4444; color:#ff4444; border-radius:0.5rem; cursor:pointer; font-weight:500;">
+                Deny Relationship
+            </button>
+        </div>
+    </div>
+
+    <style>
+        .perm-btn {
+            padding: 0.75rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+
+        .perm-btn:hover {
+            background: var(--bg-primary);
+            border-color: var(--accent);
+        }
+    </style>
+
+    <script>
+        let pendingPermission = null;
+
+        function showPermissionModal(data) {
+            pendingPermission = data;
+            document.getElementById('permission-modal').style.display = 'flex';
+            document.getElementById('perm-action-name').textContent = data.action_name;
+            document.getElementById('perm-action-desc').textContent = `The AI wants to execute: ${data.action_name}`;
+            document.getElementById('perm-action-args').textContent = JSON.stringify(data.action_args, null, 2);
+        }
+
+        async function handlePermission(scope) {
+            if (!pendingPermission) return;
+
+            const modal = document.getElementById('permission-modal');
+            modal.style.display = 'none';
+
+            const { action_name, chat_id } = pendingPermission;
+
+            if (scope === 'deny') {
+                addMessage(`[System] Permission Denied for action: ${action_name}`, "system");
+                return;
+            }
+
+            // Grant Permission (unless 'once', which is implied by resuming)
+            if (scope !== 'once') {
+                try {
+                    await fetch('/api/permissions/grant', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action_name: action_name,
+                            scope: scope,
+                            chat_id: chat_id
+                        })
+                    });
+                } catch (e) {
+                    console.error("Failed to grant permission:", e);
+                    alert("Failed to save permission setting.");
+                    return;
+                }
+            }
+
+            // Resume Chat (Execute Action)
+            resumeChatAction(chat_id);
+        }
+
+        async function resumeChatAction(chatId) {
+            try {
+                // Determine current state for resume
+                // We use global variables from index.html: thinkingToggle, modelSelect, etc.
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: "",
+                        use_thinking: document.getElementById('thinking-toggle').checked,
+                        // Priority not tracked, default normal
+                        // Return JSON default true
+                        chat_id: chatId,
+                        resume_action: true // Signal backend to resume execution
+                    })
+                });
+                handleChatStream(response);
+            } catch (err) {
+                console.error('Resume failed:', err);
+            }
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genesis - Global AI History</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- AG Grid CDN -->
+    <!-- AG Grid CDN (Pinned Version 31) -->
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/dist/ag-grid-community.min.js"></script>
+    <style>
+        .admin-wrap {
+            padding: 2rem;
+            max-width: 1600px;
+            margin: 0 auto;
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            padding: 2rem;
+            box-shadow: var(--shadow);
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* AG Grid Theme Overrides for Dark Mode */
+        .ag-theme-alpine-dark {
+            --ag-background-color: var(--bg-card);
+            --ag-foreground-color: var(--text-main);
+            --ag-header-background-color: var(--bg-sidebar);
+            --ag-row-hover-color: var(--glass);
+            --ag-check-color: var(--accent);
+            --ag-selected-row-background-color: rgba(99, 102, 241, 0.2);
+            font-family: 'Inter', sans-serif;
+            border: none;
+        }
+
+        .ag-root-wrapper {
+            border: none;
+        }
+
+        input {
+            width: 100%;
+            padding: 0.8rem 1rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            color: var(--text-main);
+            margin-bottom: 0;
+            outline: none;
+            transition: var(--transition);
+        }
+
+        input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background: var(--bg-card);
+            width: 90%;
+            max-width: 1200px;
+            height: 90%;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-body {
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+            background: #0f172a;
+            /* Slightly darker for code */
+        }
+
+        pre {
+            margin: 0;
+            white-space: pre-wrap;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.9rem;
+            color: #e2e8f0;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .close-btn:hover {
+            color: var(--text-main);
+        }
+
+        .btn-view {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 0.25rem 0.75rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: opacity 0.2s;
+        }
+
+        .btn-view:hover {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+
+<body data-theme="dark">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <span class="logo-text">Genesis Admin</span>
+            <div style="display:flex; gap: 1rem; align-items:center;">
+                <div class="theme-toggle" id="theme-toggle"
+                    style="margin:0; padding:0.5rem; background:none; cursor:pointer;">
+                    <i class="fas fa-moon" id="theme-icon"></i>
+                </div>
+            </div>
+        </div>
+
+        <nav class="nav-links">
+            <a href="/" class="nav-item">
+                <i class="fas fa-comment-dots"></i>
+                <span>Chat</span>
+            </a>
+            {% if user.role == 'admin' %}
+            <a href="/admin" class="nav-item">
+                <i class="fas fa-user-shield"></i>
+                <span>Users</span>
+            </a>
+            <div class="nav-item active">
+                <i class="fas fa-database"></i>
+                <span>Global History</span>
+            </div>
+            {% endif %}
+            <a href="/settings" class="nav-item">
+                <i class="fas fa-cog"></i>
+                <span>Settings</span>
+            </a>
+            <a href="/logout" class="nav-item" style="margin-top: auto; color: #fca5a5;">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Logout</span>
+            </a>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+        <div class="admin-wrap">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <div>
+                        <h1 style="font-family: 'Outfit'; margin:0; font-size: 1.8rem;">Global AI History</h1>
+                        <p style="color: var(--text-secondary); margin: 0.25rem 0 0 0; font-size: 0.9rem;">
+                            Raw interaction logs captured directly from the AI Engine.
+                        </p>
+                    </div>
+                    <div style="width: 300px;">
+                        <input type="text" id="searchInput" placeholder="Search logs..." style="margin-bottom:0;">
+                    </div>
+                </div>
+
+                <div id="myGrid" class="ag-theme-alpine-dark" style="width: 100%; flex: 1;"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="jsonModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h3 id="modalTitle" style="margin: 0; font-family: 'Outfit';">Log Details</h3>
+                    <span id="modalSubtitle" style="color: var(--text-secondary); font-size: 0.85rem;"></span>
+                </div>
+                <button class="close-btn" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <pre id="jsonContent"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Theme Logic
+        const themeToggle = document.getElementById('theme-toggle');
+        const themeIcon = document.getElementById('theme-icon');
+
+        if (themeToggle) {
+            themeToggle.addEventListener('click', () => {
+                const currentTheme = document.body.getAttribute('data-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                document.body.setAttribute('data-theme', newTheme);
+                themeIcon.className = newTheme === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+                localStorage.setItem('theme', newTheme);
+            });
+        }
+
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        document.body.setAttribute('data-theme', savedTheme);
+        if (themeIcon) {
+            themeIcon.className = savedTheme === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+        }
+
+        // --- AG Grid Setup ---
+
+        // Custom Renderer for View Button
+        class ViewBtnRenderer {
+            init(params) {
+                this.eGui = document.createElement('div');
+                this.eGui.innerHTML = '<button class="btn-view">View Raw</button>';
+                this.btn = this.eGui.querySelector('.btn-view');
+                this.btn.addEventListener('click', () => {
+                    openModal(params.data);
+                });
+            }
+            getGui() { return this.eGui; }
+            refresh() { return false; }
+            destroy() { }
+        }
+
+        const gridOptions = {
+            columnDefs: [
+                { field: "timestamp", headerName: "Timestamp", sortable: true, filter: true, width: 220 },
+                { field: "chat_id", headerName: "Chat ID", sortable: true, filter: true, width: 150 },
+                { field: "model", headerName: "Model", sortable: true, filter: true, width: 150 },
+                {
+                    field: "user_input",
+                    headerName: "User Input",
+                    flex: 1,
+                    wrapText: false,
+                    autoHeight: false,
+                    cellRenderer: params => {
+                        const div = document.createElement('div');
+                        div.style.whiteSpace = 'nowrap';
+                        div.style.overflow = 'hidden';
+                        div.style.textOverflow = 'ellipsis';
+                        div.textContent = params.value;
+                        div.title = params.value; // tooltip
+                        return div;
+                    }
+                },
+                {
+                    field: "response",
+                    headerName: "AI Response",
+                    flex: 1,
+                    wrapText: false,
+                    autoHeight: false,
+                    cellRenderer: params => {
+                        const div = document.createElement('div');
+                        div.style.whiteSpace = 'nowrap';
+                        div.style.overflow = 'hidden';
+                        div.style.textOverflow = 'ellipsis';
+                        div.textContent = params.value;
+                        div.title = params.value;
+                        return div;
+                    }
+                },
+                {
+                    headerName: "Actions",
+                    width: 120,
+                    cellRenderer: ViewBtnRenderer,
+                    pinned: 'right'
+                }
+            ],
+            defaultColDef: {
+                resizable: true,
+                sortable: true
+            },
+            pagination: true,
+            paginationPageSize: 20, // Adjusted for full page view
+            rowHeight: 50, // Fixed height for cleaner look
+            rowSelection: 'single',
+            onGridReady: (params) => {
+                gridApi = params.api;
+                params.api.sizeColumnsToFit();
+                loadData();
+            }
+        };
+
+        const gridDiv = document.querySelector('#myGrid');
+        // Initialize Grid
+        let gridApi = null;
+        new agGrid.Grid(gridDiv, gridOptions);
+        // Note: Using new agGrid.Grid() as ag-grid-community structure varies by version, this is robust for v28+
+
+        async function loadData(page = 1) {
+            if (!gridApi) return;
+            gridApi.showLoadingOverlay();
+            try {
+                // Fetching all for now to let Client Side Logic handle sorting/filtering easily for smooth UX
+                // Backend supports pagination but we can pull a larger chunk for client grid
+                const res = await fetch(`/api/admin/global_history?page=1&per_page=1000`);
+                const data = await res.json();
+
+                if (data.items) {
+                    gridApi.setRowData(data.items);
+                } else {
+                    gridApi.setRowData([]);
+                }
+            } catch (e) {
+                console.error(e);
+                gridApi.setRowData([]);
+            }
+        }
+
+        // Search Filter (Client Side)
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            if (gridApi) {
+                gridApi.setQuickFilter(e.target.value);
+            }
+        });
+
+        // --- Modal Logic ---
+        const modal = document.getElementById('jsonModal');
+        const jsonContent = document.getElementById('jsonContent');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalSubtitle = document.getElementById('modalSubtitle');
+
+        function openModal(item) {
+            if (!item || !item.full_log) return;
+
+            modalTitle.textContent = `Log: ${item.timestamp}`;
+            modalSubtitle.textContent = `Chat ID: ${item.chat_id} | Model: ${item.model}`;
+
+            // Pretty Print JSON
+            jsonContent.textContent = JSON.stringify(item.full_log, null, 2);
+
+            modal.style.display = 'flex';
+        }
+
+        function closeModal() {
+            modal.style.display = 'none';
+        }
+
+        // Close on click outside
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeModal();
+            }
+        });
+
+        // ESC key to close
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+
+    </script>
+</body>
+
+</html>

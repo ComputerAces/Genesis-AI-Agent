@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genesis AI - Manage Chats</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .management-card {
+            background: var(--glass);
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .chat-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        .chat-table th,
+        .chat-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .chat-table th {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .chat-table tr:hover {
+            background: var(--hover);
+        }
+
+        .action-btns {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            border: none;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-warning {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .status-badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 1rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            background: var(--bg-sidebar);
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+
+<body data-theme="dark">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <span class="logo-text">Genesis AI</span>
+            <div style="display:flex; gap: 1rem; align-items:center;">
+                <div class="theme-toggle" id="theme-toggle" style="margin:0; padding:0.5rem; background:none;">
+                    <i class="fas fa-moon" id="theme-icon"></i>
+                </div>
+                <button id="toggle-sidebar"
+                    style="background:none; border:none; color:var(--text-muted); cursor:pointer;">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+        </div>
+
+        <nav class="nav-links">
+            <a href="/" class="nav-item">
+                <i class="fas fa-comment-dots"></i>
+                <span>Chat</span>
+            </a>
+            <a href="/manage-chats" class="nav-item active">
+                <i class="fas fa-history"></i>
+                <span>Manage Chats</span>
+            </a>
+            {% if user.role == 'admin' %}
+            <a href="/admin" class="nav-item">
+                <i class="fas fa-user-shield"></i>
+                <span>Admin</span>
+            </a>
+            <a href="/settings" class="nav-item">
+                <i class="fas fa-cog"></i>
+                <span>Settings</span>
+            </a>
+            {% endif %}
+            <a href="/logout" class="nav-item">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Logout</span>
+            </a>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+        <header class="top-bar">
+            <h1 style="font-size: 1.25rem; font-weight: 600;">Manage Conversations</h1>
+            <div class="user-info" style="display:flex; align-items:center; gap:1rem;">
+                <span style="font-size:0.85rem; color:var(--text-muted);">Logged in as <strong>{{ user.username
+                        }}</strong></span>
+            </div>
+        </header>
+
+        <div style="padding: 2rem; max-width: 1200px; margin: 0 auto;">
+            <div class="management-card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1.5rem;">
+                    <h2 style="font-size: 1.1rem;">Your Active Chats</h2>
+                    <button onclick="window.location.href='/'" class="btn btn-primary"><i class="fas fa-plus"></i> New
+                        Chat</button>
+                </div>
+
+                <div id="loading" style="text-align:center; padding: 2rem; color: var(--text-muted);">
+                    <i class="fas fa-spinner fa-spin"></i> Loading conversations...
+                </div>
+
+                <table class="chat-table" id="chat-table" style="display:none;">
+                    <thead>
+                        <tr>
+                            <th>Conversation Title</th>
+                            <th>Created Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="chat-list-body">
+                        <!-- Loaded via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Sidebar & Theme toggle logic
+        const sidebar = document.getElementById('sidebar');
+        const themeToggle = document.getElementById('theme-toggle');
+        const toggleSidebarBtn = document.getElementById('toggle-sidebar');
+        const themeIcon = document.getElementById('theme-icon');
+
+        toggleSidebarBtn.addEventListener('click', () => sidebar.classList.toggle('collapsed'));
+
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        document.body.setAttribute('data-theme', savedTheme);
+        themeIcon.className = savedTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+
+        themeToggle.addEventListener('click', () => {
+            const currentTheme = document.body.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.body.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            themeIcon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+        });
+
+        async function loadConversations() {
+            try {
+                const resp = await fetch('/api/chats');
+                const chats = await resp.json();
+
+                const table = document.getElementById('chat-table');
+                const loading = document.getElementById('loading');
+                const body = document.getElementById('chat-list-body');
+
+                body.innerHTML = '';
+
+                if (chats.length === 0) {
+                    loading.innerHTML = '<i class="fas fa-info-circle"></i> No conversations found.';
+                    return;
+                }
+
+                chats.forEach(chat => {
+                    const row = document.createElement('tr');
+                    const date = new Date(chat.created_at).toLocaleDateString() + ' ' + new Date(chat.created_at).toLocaleTimeString();
+
+                    row.innerHTML = `
+                        <td>
+                            <div style="font-weight:600; color:var(--text-main);">${chat.title || 'Untitled Chat'}</div>
+                            <div style="font-size:0.7rem; color:var(--text-muted); font-family:monospace;">${chat.id}</div>
+                        </td>
+                        <td style="color:var(--text-muted); font-size:0.85rem;">${date}</td>
+                        <td>
+                            <div class="action-btns">
+                                <button class="btn btn-primary" onclick="openChat('${chat.id}')">
+                                    <i class="fas fa-external-link-alt"></i> Open
+                                </button>
+                                <button class="btn btn-warning" onclick="clearHistory('${chat.id}')">
+                                    <i class="fas fa-eraser"></i> Clear
+                                </button>
+                                <button class="btn btn-danger" onclick="deleteChat('${chat.id}')">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </div>
+                        </td>
+                    `;
+                    body.appendChild(row);
+                });
+
+                loading.style.display = 'none';
+                table.style.display = 'table';
+            } catch (err) {
+                console.error(err);
+                document.getElementById('loading').innerHTML = '<span style="color:var(--danger)">Failed to load conversations.</span>';
+            }
+        }
+
+        function openChat(chatId) {
+            localStorage.setItem('lastChatId', chatId);
+            window.location.href = '/';
+        }
+
+        async function clearHistory(chatId) {
+            if (!confirm('Are you sure you want to clear the history of this conversation? The title and chat ID will be preserved, but all messages will be deleted.')) return;
+
+            try {
+                const resp = await fetch(`/api/chats/${chatId}/clear`, { method: 'POST' });
+                if (resp.ok) {
+                    alert('History cleared successfully.');
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        async function deleteChat(chatId) {
+            if (!confirm('Are you sure you want to delete this conversation and all its history? This action cannot be undone.')) return;
+
+            try {
+                const resp = await fetch(`/api/chats/${chatId}`, { method: 'DELETE' });
+                if (resp.ok) {
+                    loadConversations();
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        loadConversations();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genesis AI - Bot Settings</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+    <style>
+        .page-container {
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            background: var(--bg-primary);
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .header {
+            padding: 1rem 1.5rem;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .content-area {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            font-size: 0.95rem;
+            transition: border-color 0.2s;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        textarea.form-control {
+            min-height: 150px;
+            resize: vertical;
+        }
+
+        .btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.95rem;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        .preview-box {
+            background: var(--bg-input);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-top: 0.5rem;
+            border-left: 3px solid var(--accent);
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page-container">
+        <!-- Reusing sidebar layout -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <i class="fas fa-atom fa-lg" style="color: var(--accent);"></i>
+                <span style="font-weight: 600; font-size: 1.1rem; letter-spacing: -0.5px;">Genesis AI</span>
+            </div>
+
+            <a href="/" class="nav-item">
+                <i class="fas fa-comment-alt"></i> Chat
+            </a>
+            <a href="/bot" class="nav-item active">
+                <i class="fas fa-robot"></i> My Bot
+            </a>
+            <a href="/actions" class="nav-item">
+                <i class="fas fa-bolt"></i> Actions
+            </a>
+            <a href="/tasks" class="nav-item">
+                <i class="fas fa-tasks"></i> Tasks
+            </a>
+            <a href="/manage-chats" class="nav-item">
+                <i class="fas fa-history"></i> History
+            </a>
+
+            {% if user.role == 'admin' %}
+            <div style="margin: 1rem 0; border-top: 1px solid var(--border-color);"></div>
+            <a href="/admin" class="nav-item">
+                <i class="fas fa-shield-alt"></i> Admin
+            </a>
+            <a href="/settings" class="nav-item">
+                <i class="fas fa-cog"></i> Settings
+            </a>
+            {% endif %}
+
+            <div style="flex:1"></div>
+
+            <div class="user-profile">
+                <div class="user-avatar">{{ user.username[0].upper() }}</div>
+                <div style="flex:1; overflow:hidden;">
+                    <div style="font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{
+                        user.username }}</div>
+                    <div style="font-size:0.75rem; opacity:0.7; text-transform:capitalize;">{{ user.role }}</div>
+                </div>
+                <a href="/logout" title="Logout" style="color:var(--text-secondary);"><i
+                        class="fas fa-sign-out-alt"></i></a>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="header">
+                <h1><i class="fas fa-robot" style="color: var(--accent);"></i> Customize Your Bot</h1>
+                <button class="btn" onclick="saveBotConfig()" id="save-btn">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+            </div>
+
+            <div class="content-area">
+                <div class="card">
+                    <div class="form-group">
+                        <label for="bot-name">Bot Name</label>
+                        <input type="text" id="bot-name" class="form-control"
+                            placeholder="e.g. Genesis AI, Jarvis, Hal">
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                            This name will be used in the welcome message and throughout the chat interface.
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="bot-personality">Personality & System Instructions</label>
+                        <textarea id="bot-personality" class="form-control"
+                            placeholder="Describe how the bot should behave..."></textarea>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                            Define the bot's tone, style, and any specific rules it should follow.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 style="font-size: 1rem; margin-bottom: 1rem;">Preview</h3>
+                    <div style="margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">Welcome
+                        Message:</div>
+                    <div class="preview-box">
+                        Hello! I am <strong id="preview-name">Genesis AI</strong>. How can I assist you today?
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Load bot config on startup
+        async function loadBotConfig() {
+            try {
+                const resp = await fetch('/api/bot');
+                const config = await resp.json();
+
+                document.getElementById('bot-name').value = config.name || '';
+                document.getElementById('bot-personality').value = config.personality || '';
+                updatePreview();
+            } catch (err) {
+                console.error('Failed to load bot config:', err);
+            }
+        }
+
+        // Save bot config
+        async function saveBotConfig() {
+            const btn = document.getElementById('save-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            btn.disabled = true;
+
+            const data = {
+                name: document.getElementById('bot-name').value,
+                personality: document.getElementById('bot-personality').value
+            };
+
+            try {
+                const resp = await fetch('/api/bot', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await resp.json();
+
+                if (result.status === 'success') {
+                    setTimeout(() => {
+                        btn.innerHTML = '<i class="fas fa-check"></i> Saved!';
+                        setTimeout(() => {
+                            btn.innerHTML = originalText;
+                            btn.disabled = false;
+                        }, 2000);
+                    }, 500);
+                } else {
+                    alert('Error saving: ' + (result.error || 'Unknown error'));
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+            } catch (err) {
+                console.error('Save failed:', err);
+                alert('Save failed. Check console.');
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // Live Preview Update
+        function updatePreview() {
+            const name = document.getElementById('bot-name').value || 'Genesis AI';
+            document.getElementById('preview-name').textContent = name;
+        }
+
+        document.getElementById('bot-name').addEventListener('input', updatePreview);
+
+        loadBotConfig();
+    </script>
+</body>
+
+</html>

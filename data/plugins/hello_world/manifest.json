@@ -1,0 +1,19 @@
+{
+    "id": "hello_world_plugin",
+    "name": "Hello World",
+    "version": "1.0.0",
+    "description": "A simple test plugin.",
+    "actions": [
+        {
+            "name": "say_hello",
+            "script": "main.py",
+            "type": "python",
+            "description": "Returns a greeting.",
+            "trigger": "manual",
+            "cache_ttl": 0,
+            "parameters": {
+                "name": "string"
+            }
+        }
+    ]
+}

@@ -1,0 +1,90 @@
+# Genesis AI Project Overview
+
+## Executive Summary
+Genesis AI is a local, agentic AI framework built on Python and Flask. It is designed to run completely offline/locally, leveraging quantized LLMs (like Qwen) to act as a personal assistant capable of executing system actions, managing files, and extending its capabilities through a plugin ecosystem (`.gplug`).
+
+## Architecture
+
+### 1. Frontend (Web UI)
+*   **Technology**: HTML5, JavaScript, CSS (Dark Mode).
+*   **Entry Point**: `templates/index.html`.
+*   **Features**:
+    *   Real-time streaming chat.
+    *   Sidebar for chat history management.
+    *   Markdown & Code syntax highlighting.
+    *   Dynamic Action Status panels (visualizing the AI's "thought process" and tool execution).
+    *   **Action Progress**: In-bubble visual feedback for multi-step action chains.
+    *   Settings, Bot Customization, and Global History management pages.
+
+### 2. Backend (API Layer)
+*   **Framework**: Flask (Modular Blueprints).
+*   **Entry Point**: `app.py` (registers blueprints).
+*   **Modules (`modules/routes/`)**:
+    *   `auth.py`: Authentication Routes.
+    *   `main.py`: Page Routes.
+    *   `chat.py`: Chat API (`/api/chat`) & History.
+    *   `admin.py`: Admin/Settings management.
+    *   `extensions.py`: Actions, Tasks, and Bot APIs.
+
+### 3. AI Core (`modules/ai_agent`)
+*   **Agent**: `AIAgent` (`core.py`) manages the conversation loop.
+    *   **JSON Action Schema**: The AI returns structured JSON `{"actions": [...]}` for precise tool execution.
+    *   **Action Loop**: Parses JSON, checks permissions, executes tools, and feeds observations back in a continuous loop.
+    *   **Thinking**: Supports "Chain of Thought" explicitly via `[THOUGHT]` blocks or model-specific thinking tokens.
+    *   **Providers**: Modular provider system (`QwenProvider`, etc.) for LLM inference.
+
+### 4. Action System (`modules/actions`)
+*   **Registry**: Loads actions from core and plugins (`registry.py`).
+*   **Executor**: Thread-safe execution of actions (`executor.py`).
+*   **Security**: integrated with `modules/permissions.py` to gate dangerous actions (requires user approval via UI).
+*   **Plugins**: Supports `.gplug` format (ZIP archives with `manifest.json`) for installing new capabilities.
+
+### 5. Data & Persistence (`modules/db.py`)
+*   **Database**: SQLite (`data/system.db`).
+*   **Tables**:
+    *   `users`: Authentication.
+    *   `chats`: Conversation metadata.
+    *   `chat_items`: The visible chat log (User inputs, Assistant responses).
+    *   `history`: Detailed forensic logs.
+    *   `permissions`: Action authorization grants.
+
+## Directory Structure
+
+```text
+Genesis/
+├── app.py                  # Main Flask Server (Entry Point)
+├── run.bat                 # Startup script
+├── requirements.txt        # Dependencies
+├── LICENSE.md              # License Information
+├── README.md               # Main Documentation Entry
+├── docs/                   # Detailed Documentation
+├── modules/                # Core Logic
+│   ├── routes/             # API Blueprints (Auth, Main, Chat, Admin, Ext)
+│   ├── ai_agent/           # LLM Integration & Agent Loop
+│   ├── actions/            # Action Loading & Execution
+│   ├── tasks/              # Background Task Scheduler
+│   ├── db.py               # Database Interface
+│   ├── permissions.py      # Security Logic
+│   └── bot_config.py       # JSON-based personality loader
+├── data/                   # Runtime Data
+│   ├── system.db           # Main SQLite DB
+│   ├── settings.json       # System Config
+│   └── prompts.json        # System Prompts
+└── templates/              # HTML Views
+    ├── index.html          # Main Chat UI
+    └── actions.html        # Plugin Manager
+```
+
+## Key Features
+
+1.  **Strictly Local**: Designed for privacy and offline capability.
+2.  **Raw History Logging**: Splits logging into "Input" (pre-generation) and "Output" (post-generation).
+3.  **Action Loops**: The AI can perform multi-step tasks (e.g., "Check disk space, if low, list large files").
+4.  **Bot Customization**: Users can define the AI's name and personality per user account.
+5.  **Granular Permissions**: "Always Allow", "Allow for Session", "Allow Once", or "Deny" for any tool usage.
+
+## Current Status (v3.1)
+*   Refactored `app.py` into modular Blueprints.
+*   Implemented JSON-Based Action Schema for reliable tool usage.
+*   Documentation (`docs/`) and Licensing added.
+*   UI improvements for Action Progress tracking.

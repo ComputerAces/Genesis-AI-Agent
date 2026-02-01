@@ -1,0 +1,16 @@
+transformers>=4.51.0
+torch
+accelerate
+flask
+flask-cors
+flask-login
+python-dotenv
+requests
+sentencepiece
+jinja2
+bitsandbytes
+psutil
+diffusers
+huggingface-hub
+protobuf
+accelerate

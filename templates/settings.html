@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genesis AI - Settings</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body data-theme="dark">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <span class="logo-text">Genesis AI</span>
+            <div style="display:flex; gap: 1rem; align-items:center;">
+                <div class="theme-toggle" id="theme-toggle" style="margin:0; padding:0.5rem; background:none;">
+                    <i class="fas fa-moon" id="theme-icon"></i>
+                </div>
+                <button id="toggle-sidebar"
+                    style="background:none; border:none; color:var(--text-muted); cursor:pointer;">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+        </div>
+
+        <nav class="nav-links">
+            <a href="/" class="nav-item">
+                <i class="fas fa-comment-dots"></i>
+                <span>Chat</span>
+            </a>
+            <a href="/manage-chats" class="nav-item">
+                <i class="fas fa-history"></i>
+                <span>Manage Chats</span>
+            </a>
+            <a href="/admin" class="nav-item">
+                <i class="fas fa-user-shield"></i>
+                <span>Admin</span>
+            </a>
+            <a href="/settings" class="nav-item active">
+                <i class="fas fa-cog"></i>
+                <span>Settings</span>
+            </a>
+            <a href="/logout" class="nav-item" style="margin-top: auto; color: #fca5a5;">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Logout</span>
+            </a>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+        <header class="top-bar">
+            <h2>Configuration Management</h2>
+            <button id="reload-btn" class="nav-item"
+                style="border:1px solid var(--secondary); border-radius:8px; padding:0.5rem 1rem;">
+                <i class="fas fa-sync-alt"></i>
+                <span style="display:inline;">Reload Server</span>
+            </button>
+        </header>
+
+        <div id="chat-container" style="padding: 2rem;">
+            <div style="max-width: 800px; margin: 0 auto; width: 100%;">
+
+                <!-- Server Settings Section -->
+                <section class="assistant" style="padding: 2rem; border-radius: 1rem; margin-bottom: 2rem;">
+                    <h3 style="margin-bottom: 1.5rem; color: var(--accent);"><i class="fas fa-server"></i> Server
+                        Options</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div>
+                            <label style="display:block; margin-bottom:0.5rem; font-size:0.9rem;">Host Address</label>
+                            <input type="text" id="server-host" style="width:100%;" class="model-select">
+                        </div>
+                        <div>
+                            <label style="display:block; margin-bottom:0.5rem; font-size:0.9rem;">Port</label>
+                            <input type="number" id="server-port" style="width:100%;" class="model-select">
+                        </div>
+                        <div style="grid-column: span 2;">
+                            <label style="display:block; margin-bottom:0.5rem; font-size:0.9rem;">Default Model
+                                ID</label>
+                            <input type="text" id="server-default-model" style="width:100%;" class="model-select">
+                        </div>
+                        <div style="grid-column: span 2;">
+                            <label style="display:block; margin-bottom:0.5rem; font-size:0.9rem;">Welcome Message (New
+                                Chat)</label>
+                            <textarea id="server-welcome-message" class="model-select"
+                                style="width:100%; height:80px; resize:vertical;"></textarea>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Models Section -->
+                <section class="assistant" style="padding: 2rem; border-radius: 1rem;">
+                    <h3 style="margin-bottom: 1.5rem; color: var(--accent);"><i class="fas fa-brain"></i> AI Models</h3>
+                    <div id="models-list">
+                        <!-- Model cards here -->
+                    </div>
+                    <button id="add-model-btn" class="nav-item"
+                        style="width:100%; margin-top:1rem; justify-content:center; border:1px dashed var(--accent);">
+                        <i class="fas fa-plus"></i>
+                        <span style="display:inline;">Add New Model</span>
+                    </button>
+                </section>
+
+                <!-- Prompts Section -->
+                <section class="assistant" style="padding: 2rem; border-radius: 1rem; margin-top: 2rem;">
+                    <h3 style="margin-bottom: 1.5rem; color: var(--accent);"><i class="fas fa-terminal"></i> System
+                        Prompts</h3>
+                    <div id="prompts-list">
+                        <!-- Prompt editors here -->
+                    </div>
+                    <button id="add-prompt-btn" class="nav-item"
+                        style="width:100%; margin-top:1rem; justify-content:center; border:1px dashed var(--accent);">
+                        <i class="fas fa-plus"></i>
+                        <span style="display:inline;">Add New Prompt ID</span>
+                    </button>
+                </section>
+
+                <div style="margin-top: 2rem; display: flex; justify-content: flex-end;">
+                    <button id="save-settings-btn"
+                        style="background:var(--accent); color:white; border:none; padding:0.75rem 2rem; border-radius:0.75rem; cursor:pointer; font-weight:600;">
+                        Save All Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const sidebar = document.getElementById('sidebar');
+        const toggleBtn = document.getElementById('toggle-sidebar');
+        const themeToggle = document.getElementById('theme-toggle');
+        const themeIcon = document.getElementById('theme-icon');
+        let currentSettings = null;
+        let currentPrompts = null;
+
+        // Sidebar Toggle
+        toggleBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('collapsed');
+        });
+
+        // Theme Toggle
+        themeToggle.addEventListener('click', () => {
+            const currentTheme = document.body.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.body.setAttribute('data-theme', newTheme);
+            themeIcon.className = newTheme === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+            localStorage.setItem('theme', newTheme);
+        });
+
+        // Load Settings
+        async function loadSettings() {
+            const resp = await fetch('/api/settings');
+            currentSettings = await resp.json();
+
+            // Populate Server
+            document.getElementById('server-host').value = currentSettings.server.host;
+            document.getElementById('server-port').value = currentSettings.server.port;
+            document.getElementById('server-default-model').value = currentSettings.server.default_model;
+            document.getElementById('server-welcome-message').value = currentSettings.server.welcome_message || "";
+
+            renderModels();
+            loadPrompts();
+        }
+
+        async function loadPrompts() {
+            try {
+                const resp = await fetch('/api/prompts');
+                currentPrompts = await resp.json();
+                renderPrompts();
+            } catch (e) {
+                console.error("Error loading prompts:", e);
+                currentPrompts = {};
+            }
+        }
+
+        function renderModels() {
+            const list = document.getElementById('models-list');
+            list.innerHTML = '';
+
+            currentSettings.models.forEach((m, idx) => {
+                const s = m.sampling || {
+                    thinking: { temperature: 0.6, top_p: 0.95, top_k: 20, min_p: 0.0 },
+                    normal: { temperature: 0.7, top_p: 0.8, top_k: 20, min_p: 0.0 }
+                };
+                // Fallback for old single-sampling format
+                if (!s.thinking) {
+                    const oldS = JSON.parse(JSON.stringify(s));
+                    s.thinking = oldS;
+                    s.normal = oldS;
+                }
+
+                const rs = m.rope_scaling || { type: "", factor: 1.0 };
+
+                const card = document.createElement('div');
+                card.style.background = 'var(--glass)';
+                card.style.padding = '1rem';
+                card.style.borderRadius = '0.75rem';
+                card.style.marginBottom = '2rem';
+                card.style.border = '1px solid var(--border)';
+
+                card.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; margin-bottom:1rem; border-bottom: 2px solid var(--border); padding-bottom: 0.5rem;">
+                        <strong style="font-size: 1.1rem;"><i class="fas fa-microchip"></i> ${m.id}</strong>
+                        <button onclick="removeModel(${idx})" style="background:none; border:none; color:#ff4444; cursor:pointer;"><i class="fas fa-trash"></i></button>
+                    </div>
+                    
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem; margin-bottom: 1.5rem;">
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);">Model Type</label>
+                            <input type="text" value="${m.type}" onchange="updateModel(${idx}, 'type', this.value)" class="model-select" style="width:100%">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);">Model Path/Name</label>
+                            <input type="text" value="${m.name}" onchange="updateModel(${idx}, 'name', this.value)" class="model-select" style="width:100%">
+                        </div>
+                    </div>
+
+                    <!-- Thinking Sampling -->
+                    <div style="margin-bottom: 1.5rem; background: rgba(99, 102, 241, 0.05); padding: 1rem; border-radius: 12px; border: 1px solid rgba(99, 102, 241, 0.1);">
+                        <span style="font-size: 0.85rem; font-weight: bold; color: var(--accent); display: block; margin-bottom: 0.5rem;">
+                            <i class="fas fa-brain"></i> Thinking Mode Sampling
+                        </span>
+                        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:0.5rem;">
+                            <div>
+                                <label style="font-size: 0.7rem;">Temp</label>
+                                <input type="number" step="0.1" value="${s.thinking.temperature}" onchange="updateModelSampling(${idx}, 'thinking', 'temperature', this.value)" class="model-select" style="width:100%">
+                            </div>
+                            <div>
+                                <label style="font-size: 0.7rem;">Top P</label>
+                                <input type="number" step="0.01" value="${s.thinking.top_p}" onchange="updateModelSampling(${idx}, 'thinking', 'top_p', this.value)" class="model-select" style="width:100%">
+                            </div>
+                            <div>
+                                <label style="font-size: 0.7rem;">Top K</label>
+                                <input type="number" value="${s.thinking.top_k}" onchange="updateModelSampling(${idx}, 'thinking', 'top_k', this.value)" class="model-select" style="width:100%">
+                            </div>
+                            <div>
+                                <label style="font-size: 0.7rem;">Min P</label>
+                                <input type="number" step="0.01" value="${s.thinking.min_p}" onchange="updateModelSampling(${idx}, 'thinking', 'min_p', this.value)" class="model-select" style="width:100%">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Normal Sampling -->
+                    <div style="margin-bottom: 1.5rem; background: rgba(139, 92, 246, 0.05); padding: 1rem; border-radius: 12px; border: 1px solid rgba(139, 92, 246, 0.1);">
+                        <span style="font-size: 0.85rem; font-weight: bold; color: var(--secondary); display: block; margin-bottom: 0.5rem;">
+                            <i class="fas fa-comment"></i> Normal Mode Sampling
+                        </span>
+                        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:0.5rem;">
+                            <div>
+                                <label style="font-size: 0.7rem;">Temp</label>
+                                <input type="number" step="0.1" value="${s.normal.temperature}" onchange="updateModelSampling(${idx}, 'normal', 'temperature', this.value)" class="model-select" style="width:100%">
+                            </div>
+                            <div>
+                                <label style="font-size: 0.7rem;">Top P</label>
+                                <input type="number" step="0.01" value="${s.normal.top_p}" onchange="updateModelSampling(${idx}, 'normal', 'top_p', this.value)" class="model-select" style="width:100%">
+                            </div>
+                            <div>
+                                <label style="font-size: 0.7rem;">Top K</label>
+                                <input type="number" value="${s.normal.top_k}" onchange="updateModelSampling(${idx}, 'normal', 'top_k', this.value)" class="model-select" style="width:100%">
+                            </div>
+                            <div>
+                                <label style="font-size: 0.7rem;">Min P</label>
+                                <input type="number" step="0.01" value="${s.normal.min_p}" onchange="updateModelSampling(${idx}, 'normal', 'min_p', this.value)" class="model-select" style="width:100%">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="background: var(--glass); padding: 1rem; border-radius: 12px; border: 1px solid var(--border); display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div>
+                            <span style="font-size: 0.85rem; font-weight: bold; color: var(--text-main); display: block; margin-bottom: 0.5rem;">
+                                <i class="fas fa-expand-arrows-alt"></i> Scaling
+                            </span>
+                            <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-size: 0.8rem;">
+                                <input type="checkbox" ${m.use_yarn ? 'checked' : ''} onchange="updateModel(${idx}, 'use_yarn', this.checked)">
+                                Enable YaRN (Auto)
+                            </label>
+                        </div>
+                        <div>
+                            <span style="font-size: 0.85rem; font-weight: bold; color: var(--text-main); display: block; margin-bottom: 0.5rem;">
+                                <i class="fas fa-history"></i> History Context
+                            </span>
+                            <div style="display:flex; flex-direction:column; gap:0.25rem;">
+                                <input type="range" min="0" max="1" step="0.1" value="${m.history_ratio || 0.5}" 
+                                    oninput="this.nextElementSibling.innerText = this.value; updateModel(${idx}, 'history_ratio', parseFloat(this.value))" 
+                                    class="model-select" style="padding:0; height:8px;">
+                                <div style="font-size: 0.7rem; text-align:right; font-weight:bold; color:var(--accent);">
+                                    Ratio: <span>${m.history_ratio || 0.5}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                list.appendChild(card);
+            });
+        }
+
+        function updateModel(idx, key, val) {
+            currentSettings.models[idx][key] = val;
+        }
+
+        function updateModelSampling(idx, profile, key, val) {
+            if (!currentSettings.models[idx].sampling) currentSettings.models[idx].sampling = { thinking: {}, normal: {} };
+            if (!currentSettings.models[idx].sampling[profile]) currentSettings.models[idx].sampling[profile] = {};
+            currentSettings.models[idx].sampling[profile][key] = parseFloat(val);
+        }
+
+        function updateModelScaling(idx, key, val) {
+            if (!currentSettings.models[idx].rope_scaling) currentSettings.models[idx].rope_scaling = {};
+            if (key === 'factor') val = parseFloat(val);
+            currentSettings.models[idx].rope_scaling[key] = val;
+        }
+
+        function removeModel(idx) {
+            currentSettings.models.splice(idx, 1);
+            renderModels();
+        }
+
+        function renderPrompts() {
+            const list = document.getElementById('prompts-list');
+            list.innerHTML = '';
+
+            Object.keys(currentPrompts).forEach(id => {
+                const card = document.createElement('div');
+                card.style.background = 'var(--glass)';
+                card.style.padding = '1rem';
+                card.style.borderRadius = '0.75rem';
+                card.style.marginBottom = '1rem';
+                card.style.border = '1px solid var(--border)';
+
+                card.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
+                        <input type="text" value="${id}" onchange="renamePrompt('${id}', this.value)" style="background:none; border:none; color:var(--accent); font-weight:bold; outline:none; width: 80%;">
+                        <button onclick="removePrompt('${id}')" style="background:none; border:none; color:#ff4444; cursor:pointer;"><i class="fas fa-trash"></i></button>
+                    </div>
+                    <textarea class="model-select" style="width:100%; height:80px; resize:vertical; font-size:0.85rem;" onchange="updatePrompt('${id}', this.value)">${currentPrompts[id]}</textarea>
+                `;
+                list.appendChild(card);
+            });
+        }
+
+        function updatePrompt(id, val) {
+            currentPrompts[id] = val;
+        }
+
+        function renamePrompt(oldId, newId) {
+            if (newId === oldId) return;
+            currentPrompts[newId] = currentPrompts[oldId];
+            delete currentPrompts[oldId];
+            renderPrompts();
+        }
+
+        function removePrompt(id) {
+            delete currentPrompts[id];
+            renderPrompts();
+        }
+
+        document.getElementById('add-model-btn').onclick = () => {
+            currentSettings.models.push({
+                id: "New-Model",
+                type: "qwen",
+                name: "path/to/model",
+                input_size: 2048,
+                output_size: 32768,
+                device: "auto",
+                quantize: "int8"
+            });
+            renderModels();
+        };
+
+        document.getElementById('add-prompt-btn').onclick = () => {
+            currentPrompts["new_prompt_id"] = "Enter system prompt instructions here...";
+            renderPrompts();
+        };
+
+        document.getElementById('save-settings-btn').onclick = async () => {
+            currentSettings.server.host = document.getElementById('server-host').value;
+            currentSettings.server.port = parseInt(document.getElementById('server-port').value);
+            currentSettings.server.default_model = document.getElementById('server-default-model').value;
+            currentSettings.server.welcome_message = document.getElementById('server-welcome-message').value;
+
+            const resp = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(currentSettings)
+            });
+
+            const promptResp = await fetch('/api/prompts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(currentPrompts)
+            });
+
+            if (resp.ok && promptResp.ok) alert('Settings and Prompts saved successfully!');
+            else alert('Error saving settings or prompts.');
+        };
+
+        document.getElementById('reload-btn').onclick = async () => {
+            if (confirm('Restart the server to apply changes?')) {
+                await fetch('/api/reload', { method: 'POST' });
+                alert('Server is restarting... This page will refresh in 5 seconds.');
+                setTimeout(() => location.reload(), 5000);
+            }
+        };
+
+        // Init
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        document.body.setAttribute('data-theme', savedTheme);
+        themeIcon.className = savedTheme === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+        loadSettings();
+    </script>
+</body>
+
+</html>

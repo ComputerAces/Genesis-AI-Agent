@@ -1,0 +1,17 @@
+{
+  "id": "system_info",
+  "name": "System Information",
+  "version": "1.0.0",
+  "description": "Gets the system RAM/CPU usage, along with system name.",
+  "actions": [
+    {
+      "name": "system_info",
+      "script": "main.py",
+      "type": "python",
+      "description": "Gets the system RAM/CPU usage, along with system name.",
+      "trigger": "pre_request",
+      "cache_ttl": 0,
+      "parameters": {}
+    }
+  ]
+}
