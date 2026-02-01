@@ -839,12 +839,31 @@ class AIAgent:
                            except Exception as e:
                                observations.append(f"Action '{name}' Failed: {str(e)}")
 
-                        current_prompt = f"Observations:\n" + "\n".join(observations)
+                        # Prepare Action Data for System Prompt
+                        observations_str = "\n".join(observations)
                         
-                        # Loop Update
+                        # Switch to "action_formater" System Prompt
+                        new_sys_prompt = build_system_prompt(
+                             user_id=user_id,
+                             available_actions=available_actions_list,
+                             action_data=observations_str, 
+                             bot_config=bot_config,
+                             prompt_id="action_formater",
+                             user_message=prompt
+                        )
+                         
+                        # Update System Message in History Loop
+                        if loop_history and loop_history[0].get('role') == 'system':
+                             loop_history[0]['content'] = new_sys_prompt
+
+                        # Commit the previous turn to history
                         if current_loop == 0:
-                            loop_history.append({"role": "user", "content": prompt or current_prompt}) # Ensure prompt is in
+                            loop_history.append({"role": "user", "content": prompt or "Action Request"}) 
                         loop_history.append({"role": "assistant", "content": full_content_raw})
+                        
+                        # Set trigger for next generation
+                        current_prompt = "Actions executed. Please formulate the response."
+                        
                         current_loop += 1
                         continue
                     else:
