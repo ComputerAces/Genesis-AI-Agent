@@ -1,6 +1,16 @@
 # Genesis AI
 
+**Current Status: "Baby" Stage**
+
 Genesis is a powerful, modular, and locally-hosted AI Agent platform. It features a robust plugin system, autonomous action execution, and a sleek web interface.
+
+> **Note**: This entire system was built in just **3 days** using **Antigravity**.
+
+## Vision & Growth
+
+We are currently in the "Baby" stage of development, but the potential is limitless. We are actively looking for contributors, visionaries, and supporters to help **grow this system** and push it out to the world.
+
+If you believe in local, private, and powerful AI, join us in making Genesis a standard for personal AI agents.
 
 ## Quick Install
 
@@ -19,6 +29,19 @@ Genesis is a powerful, modular, and locally-hosted AI Agent platform. It feature
 
 4. **Open**: `http://127.0.0.1:5000`
 
+## Upgrading Models
+
+By default, Genesis is configured for lightweight models (like Qwen 0.5B/1.5B) to ensure it runs on most hardware.
+
+**Want more power?**
+To enable better, larger, or different models:
+
+1. Load this codebase into **Antigravity**.
+2. Provide the specs of the new model you want (e.g., Llama 3, Mistral, larger Qwen variants).
+3. Tell Antigravity to add it.
+
+It's that simple. The system is designed to be evolved *by* AI.
+
 ## Documentation
 
 For detailed instructions, please check the [docs](docs/) folder:
@@ -29,7 +52,7 @@ For detailed instructions, please check the [docs](docs/) folder:
 
 ## Support the Project
 
-If you enjoy Genesis and want to support development:
+If you enjoy Genesis and want to support its rapid development:
 
 **CashApp**: @brafordBrooks
 
