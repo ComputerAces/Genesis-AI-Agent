@@ -166,9 +166,18 @@ class TaskScheduler:
                     # For a full cron implementation, use croniter library
                     if self._should_run(schedule, now):
                         self.logger.info(f"Scheduled run: {task.get('name')}")
-                        # In a full implementation, we'd call run_task here
-                        # with executor and registry from a global context
-                        self.tasks[task_id]["last_run"] = now.isoformat()
+                        
+                        # Import here to avoid circular dependencies if any
+                        from modules.actions import ActionRegistry, ActionExecutor
+                        registry = ActionRegistry()
+                        executor = ActionExecutor()
+                        
+                        # Ensure we see user's plugins
+                        user_id = task.get("user_id")
+                        if user_id:
+                            registry.scan_plugins(user_id)
+                        
+                        self.run_task(task_id, executor, registry)
                 
             except Exception as e:
                 self.logger.error(f"Scheduler error: {e}")

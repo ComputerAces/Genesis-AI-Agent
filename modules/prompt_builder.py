@@ -16,7 +16,9 @@ def build_system_prompt(
     user_id: str,
     available_actions: List[Dict],
     action_data: str = "",
-    bot_config: Dict = None
+    bot_config: Dict = None,
+    prompt_id: str = "user_chat",
+    user_message: str = ""
 ) -> str:
     """
     Build a complete system prompt with bot personality and available actions.
@@ -26,9 +28,11 @@ def build_system_prompt(
         available_actions: List of action definitions from registry
         action_data: Pre-request plugin output to inject
         bot_config: Bot configuration (name, personality)
+        prompt_id: The ID of the prompt template to use from prompts.json
+        user_message: The original user message (for action_formater)
     """
     prompts = load_prompts()
-    template = prompts.get("user_chat", "")
+    template = prompts.get(prompt_id, prompts.get("user_chat", ""))
     
     # Inject bot personality
     if bot_config:
@@ -41,6 +45,10 @@ def build_system_prompt(
     template = template.replace("[bot_name]", bot_name)
     template = template.replace("[bot_personality]", bot_personality)
     
+    # Inject User Message (if present in template)
+    if user_message:
+        template = template.replace("[user_message]", user_message)
+
     # Remove [history] placeholder - history is injected separately via format_history_for_prompt
     template = template.replace("Context history: [history]", "")
     template = template.replace("[history]", "")

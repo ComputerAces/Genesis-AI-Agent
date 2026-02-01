@@ -660,7 +660,24 @@ class AIAgent:
                              except Exception as e:
                                  observations.append(f"Action '{name}' Failed: {str(e)}")
 
-                         current_prompt = f"Observations:\n" + "\n".join(observations)
+                         # Update System Prompt to "action_formater" mode
+                         observations_str = "\n".join(observations)
+                         
+                         new_sys_prompt = build_system_prompt(
+                             user_id=user_id,
+                             available_actions=available_actions_list,
+                             action_data=observations_str, 
+                             bot_config=bot_config,
+                             prompt_id="action_formater",
+                             user_message=prompt
+                         )
+                         
+                         # Update System Message in History
+                         if loop_history and loop_history[0].get('role') == 'system':
+                             loop_history[0]['content'] = new_sys_prompt
+                         
+                         # Set current prompt to trigger summary
+                         current_prompt = "Actions executed. Please formulate the response."
                          current_loop = 1
                      else:
                          current_prompt = "Observation: No actions found to resume."

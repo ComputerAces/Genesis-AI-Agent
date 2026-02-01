@@ -41,11 +41,16 @@ app.register_blueprint(chat_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(ext_bp)
 
+# Start Task Scheduler
+from modules.tasks import get_scheduler
+get_scheduler().start()
+
 # Signal Handler
 def signal_handler(sig, frame):
     print("\n[System] Shutdown signal received. Cleaning up...")
     if agent:
         agent.shutdown()
+    get_scheduler().stop()
     os._exit(0)
 
 signal.signal(signal.SIGINT, signal_handler)
