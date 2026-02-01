@@ -31,8 +31,8 @@
         }
       },
       "token_usage": {
-        "input": 8864,
-        "output": 4501
+        "input": 9306,
+        "output": 4693
       },
       "type": "qwen",
       "use_yarn": true

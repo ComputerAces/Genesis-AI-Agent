@@ -372,12 +372,18 @@ class AIAgent:
                             if isinstance(raw_actions, list):
                                 for ra in raw_actions:
                                     if "name" in ra:
-                                        # Convert params list to dict
+                                        # Convert params to dict (handle both Dict and List formats)
                                         args = {}
-                                        if "parameters" in ra and isinstance(ra["parameters"], list):
-                                            for p in ra["parameters"]:
-                                                if "name" in p: # and "value" in p
-                                                    args[p["name"]] = p.get("value", "")
+                                        if "parameters" in ra:
+                                            params = ra["parameters"]
+                                            if isinstance(params, dict):
+                                                args = params
+                                            elif isinstance(params, list):
+                                                for p in params:
+                                                    if "name" in p:
+                                                        args[p["name"]] = p.get("value", "")
+                                        
+                                        print(f"[DEBUG:Core] Found Action: {ra['name']} with Args: {args}")
                                         
                                         found_actions.append({
                                             "name": ra["name"],
