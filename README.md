@@ -42,6 +42,15 @@ To enable better, larger, or different models:
 
 It's that simple. The system is designed to be evolved *by* AI.
 
+## User & Admin System
+
+Genesis features a secure **Role-Based Access Control (RBAC)** system.
+
+- **Users**: Private managed chat, personal memory, and personal plugins.
+- **Admins**: Full control over system settings, global history, prompts, and user accounts.
+
+For full details on managing users and permissions, see the **[User Management Guide](docs/user_management.md)**.
+
 ## Documentation
 
 For detailed instructions, please check the [docs](docs/) folder:
