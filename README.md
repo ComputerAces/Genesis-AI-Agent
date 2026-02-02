@@ -74,8 +74,6 @@ For detailed instructions, please check the [docs](docs/) folder:
 * [Code Breakdown](docs/code_breakdown.md)
 * [Adding Actions / Plugins](docs/adding_actions.md)
 
-* [Adding Actions / Plugins](docs/adding_actions.md)
-
 ## Community
 
 Join the conversation, ask questions, and show off your plugins on our **[GitHub Discussions Board](https://github.com/ComputerAces/Genesis-AI-Agent/discussions)**.
