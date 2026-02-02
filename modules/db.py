@@ -111,7 +111,7 @@ def init_db():
 def save_chat_item(chat_id, role, content, thinking=None):
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     db_path = os.path.join(base_dir, "data", "system.db")
-    # print(f"[DEBUG:DB] save_chat_item[{role}] content_len={len(content) if content else 0} -> {db_path}")
+    print(f"[DEBUG:DB] save_chat_item[{role}] chat_id={chat_id} content_len={len(content) if content else 0}", flush=True)
     
     try:
         conn = sqlite3.connect(db_path)
@@ -123,7 +123,7 @@ def save_chat_item(chat_id, role, content, thinking=None):
             (chat_id, role, content, thinking)
         )
         row_id = cursor.lastrowid
-        # print(f"[DEBUG:DB] Inserted row_id={row_id}")
+        print(f"[DEBUG:DB] Inserted row_id={row_id}", flush=True)
         
         # Update chat timestamp
         cursor.execute("UPDATE chats SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", (chat_id,))
@@ -156,7 +156,7 @@ def update_history_entry(entry_id, content=None, thinking=None):
         elif thinking is not None:
             cursor.execute("UPDATE chat_items SET thinking = ? WHERE id = ?", (thinking, entry_id))
         
-        print(f"[DEBUG:DB] Updated Entry {entry_id}, RowCount={cursor.rowcount}, ContentLen={len(content) if content else 'None'}", flush=True)
+        # print(f"[DEBUG:DB] Updated Entry {entry_id}, RowCount={cursor.rowcount}, ContentLen={len(content) if content else 'None'}", flush=True)
         conn.commit()
         conn.close()
     except Exception as e:

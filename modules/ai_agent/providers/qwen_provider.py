@@ -25,10 +25,7 @@ class QwenProvider:
                 print(f"[FATAL] Could not load Tokenizer locally either: {e2}")
                 raise e2
         
-        # Create offload folder if it doesn't exist
-        offload_dir = "model_offload"
-        if not os.path.exists(offload_dir):
-            os.makedirs(offload_dir)
+
 
         # Config quantization based on settings
         quantization_config = None
@@ -58,12 +55,20 @@ class QwenProvider:
                 "rope_theta": 1000000.0
             }
         
+        # Use bfloat16 or float16 for speed/memory optimization
+        torch_dtype = "auto"
+        if device != "cpu":
+            if torch.cuda.is_available() and torch.cuda.is_bf16_supported():
+                torch_dtype = torch.bfloat16
+            else:
+                torch_dtype = torch.float16
+        
         load_kwargs = {
-            "torch_dtype": "auto",
+            "dtype": torch_dtype,
             "device_map": device,
             "quantization_config": quantization_config,
-            "offload_folder": offload_dir,
-            "offload_state_dict": True
+            # "offload_folder": "model_offload", # Removed per user request
+            # "offload_state_dict": True
         }
         
         if rope_scaling:

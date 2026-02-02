@@ -9,82 +9,88 @@ Genesis AI is a local, agentic AI framework built on Python and Flask. It is des
 *   **Technology**: HTML5, JavaScript, CSS (Dark Mode).
 *   **Entry Point**: `templates/index.html`.
 *   **Features**:
-    *   Real-time streaming chat.
-    *   Sidebar for chat history management.
-    *   Markdown & Code syntax highlighting.
-    *   Dynamic Action Status panels (visualizing the AI's "thought process" and tool execution).
-    *   **Action Progress**: In-bubble visual feedback for multi-step action chains.
-    *   Settings, Bot Customization, and Global History management pages.
+    *   **Real-time Streaming**: Instant chat feedback with typing indicators.
+    *   **Voice Integration**: Built-in Speech-to-Text (STT) and Text-to-Speech (TTS) with auto-read.
+    *   **Action Visualization**: Dynamic bubbles showing "Running Action...", "Thinking...", and JSON widgets.
+    *   **Bot Customization**: Dedicated UI for changing the AI's name and personality.
+    *   **Global History**: Admin view for auditing all AI interactions.
+    *   **Plugin Manager**: UI for installing, enabling, and editing Action Plugins.
 
 ### 2. Backend (API Layer)
 *   **Framework**: Flask (Modular Blueprints).
-*   **Entry Point**: `app.py` (registers blueprints).
+*   **Entry Point**: `app.py`.
 *   **Modules (`modules/routes/`)**:
-    *   `auth.py`: Authentication Routes.
-    *   `main.py`: Page Routes.
-    *   `chat.py`: Chat API (`/api/chat`) & History.
-    *   `admin.py`: Admin/Settings management.
-    *   `extensions.py`: Actions, Tasks, and Bot APIs.
+    *   `auth.py`: JWT-based Authentication & RBAC.
+    *   `chat.py`: Chat API (`/api/chat`) with History & Permission hooks.
+    *   `files.py`: File upload/management for plugins.
+    *   `bot.py`: Personality management endpoints.
+    *   `admin.py`: System administration.
 
 ### 3. AI Core (`modules/ai_agent`)
-*   **Agent**: `AIAgent` (`core.py`) manages the conversation loop.
-    *   **JSON Action Schema**: The AI returns structured JSON `{"actions": [...]}` for precise tool execution.
-    *   **Action Loop**: Parses JSON, checks permissions, executes tools, and feeds observations back in a continuous loop.
-    *   **Thinking**: Supports "Chain of Thought" explicitly via `[THOUGHT]` blocks or model-specific thinking tokens.
-    *   **Providers**: Modular provider system (`QwenProvider`, etc.) for LLM inference.
+*   **Agent**: `AIAgent` (`core.py`) manages the recursive "Action Loop".
+    *   **Multi-Step Reasoning**: Can execute an action, read the result, and decide to run another action (recursion).
+    *   **JSON Schema**: Uses structured `{"actions": [...]}` output for reliable tool calling.
+    *   **Resume Logic**: Can pause for user permission and resume accurately after approval.
+    *   **Providers**: Modular support for local models (Qwen, Llama, etc.).
 
 ### 4. Action System (`modules/actions`)
-*   **Registry**: Loads actions from core and plugins (`registry.py`).
-*   **Executor**: Thread-safe execution of actions (`executor.py`).
-*   **Security**: integrated with `modules/permissions.py` to gate dangerous actions (requires user approval via UI).
-*   **Plugins**: Supports `.gplug` format (ZIP archives with `manifest.json`) for installing new capabilities.
+*   **Registry**: Dynamic loading of both internal actions and external plugins.
+*   **Isolation**: Plugins run in their own venv (virtual environment) for dependency safety.
+*   **Security**: "Permission-First" architecture. All sensitive actions require explicit user approval (Once, Session, or Always).
+*   **Execution**: Parallel execution of non-dependent actions using `concurrent.futures`.
 
-### 5. Data & Persistence (`modules/db.py`)
+### 5. Task System (`modules/tasks`)
+*   **Scheduler**: Background job runner for cron-like tasks (e.g., "Check email every morning").
+*   **Management**: Dedicated `tasks.html` UI for creating and monitoring automated jobs.
+
+### 6. Data & Persistence (`modules/db.py`)
 *   **Database**: SQLite (`data/system.db`).
 *   **Tables**:
-    *   `users`: Authentication.
+    *   `users`: Authentication & Role (User vs Admin).
     *   `chats`: Conversation metadata.
-    *   `chat_items`: The visible chat log (User inputs, Assistant responses).
-    *   `history`: Detailed forensic logs.
-    *   `permissions`: Action authorization grants.
+    *   `chat_items`: The visible chat log (supports JSON widgets).
+    *   `history`: Detailed raw logs of Prompt In/Response Out for debugging.
+    *   `permissions`: User grants for specific actions.
 
 ## Directory Structure
 
 ```text
 Genesis/
-├── app.py                  # Main Flask Server (Entry Point)
+├── app.py                  # Main Flask Server
 ├── run.bat                 # Startup script
 ├── requirements.txt        # Dependencies
 ├── LICENSE.md              # License Information
-├── README.md               # Main Documentation Entry
-├── docs/                   # Detailed Documentation
+├── README.md               # Main Documentation
+├── docs/                   # Detailed Guides
 ├── modules/                # Core Logic
-│   ├── routes/             # API Blueprints (Auth, Main, Chat, Admin, Ext)
+│   ├── routes/             # API Blueprints
 │   ├── ai_agent/           # LLM Integration & Agent Loop
 │   ├── actions/            # Action Loading & Execution
 │   ├── tasks/              # Background Task Scheduler
 │   ├── db.py               # Database Interface
-│   ├── permissions.py      # Security Logic
-│   └── bot_config.py       # JSON-based personality loader
+│   └── permissions.py      # Security Logic
 ├── data/                   # Runtime Data
 │   ├── system.db           # Main SQLite DB
 │   ├── settings.json       # System Config
-│   └── prompts.json        # System Prompts
+│   ├── prompts.json        # System Prompts
+│   └── plugins/            # Installed Action Plugins
 └── templates/              # HTML Views
     ├── index.html          # Main Chat UI
-    └── actions.html        # Plugin Manager
+    ├── actions.html        # Plugin Manager
+    ├── bot.html            # Personality Settings
+    └── tasks.html          # Task Scheduler
 ```
 
 ## Key Features
 
 1.  **Strictly Local**: Designed for privacy and offline capability.
-2.  **Raw History Logging**: Splits logging into "Input" (pre-generation) and "Output" (post-generation).
-3.  **Action Loops**: The AI can perform multi-step tasks (e.g., "Check disk space, if low, list large files").
-4.  **Bot Customization**: Users can define the AI's name and personality per user account.
-5.  **Granular Permissions**: "Always Allow", "Allow for Session", "Allow Once", or "Deny" for any tool usage.
+2.  **Voice-First Capable**: Full duplex voice interaction support.
+3.  **Recursive Action Loops**: The AI can perform complex multi-step tasks autonomously.
+4.  **Granular Security**: Fine-grained permissions (Allow Once/Session/Always).
+5.  **Extensible**: Add Python scripts as plugins with full PyPI support.
+6.  **Multimedia**: Capable of generating images (Z-Image) and processing files.
 
 ## Current Status (v3.1)
-*   Refactored `app.py` into modular Blueprints.
-*   Implemented JSON-Based Action Schema for reliable tool usage.
-*   Documentation (`docs/`) and Licensing added.
-*   UI improvements for Action Progress tracking.
+*   **Stable**: Core Action Loop, Plugin System, and Web UI.
+*   **New**: Voice Chat, Z-Image Generation, Task Scheduler.
+*   **Optimized**: 4-bit Quantization support for low-VRAM usage.

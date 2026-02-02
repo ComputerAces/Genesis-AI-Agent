@@ -59,7 +59,7 @@ class ActionExecutor:
         
         return venv_python
 
-    def execute(self, action_def: Dict, args: Dict, context: Dict) -> Dict:
+    def execute(self, action_def: Dict, args: Dict, context: Dict, progress_callback=None) -> Dict:
         """
         Executes an action based on its definition.
         
@@ -105,11 +105,11 @@ class ActionExecutor:
                 # Check for plugin-specific venv
                 venv_python = self._ensure_plugin_venv(plugin_path)
                 python_exe = venv_python if venv_python else sys.executable
-                return self._execute_python_internal(script_path, args, env, python_exe)
+                return self._execute_python_internal(script_path, args, env, python_exe, progress_callback)
             elif action_type == "python_inproc":
-                 return self._execute_python_inproc(script_path, args, context)
+                 return self._execute_python_inproc(script_path, args, context) # In-proc needs update too?
             elif action_type == "process":
-                return self._execute_process(script_path, args_json, env)
+                return self._execute_process(script_path, args_json, env, progress_callback)
             else:
                 return {"status": "error", "error": f"Unknown action type: {action_type}"}
 
@@ -154,7 +154,7 @@ class ActionExecutor:
             self.logger.error(f"In-process execution failed: {tb}")
             return {"status": "error", "error": f"In-process execution failed: {str(e)}"}
 
-    def _execute_python_internal(self, script_path: str, args: Dict, env: Dict, python_exe: str = None) -> Dict:
+    def _execute_python_internal(self, script_path: str, args: Dict, env: Dict, python_exe: str = None, progress_callback=None) -> Dict:
         """
         Executes a python script as a subprocess.
         Uses provided python_exe (from venv) or falls back to sys.executable.
@@ -162,14 +162,14 @@ class ActionExecutor:
         if python_exe is None:
             python_exe = sys.executable
         cmd = [python_exe, script_path]
-        return self._run_subprocess(cmd, args_json=json.dumps(args), env=env)
+        return self._run_subprocess(cmd, args_json=json.dumps(args), env=env, progress_callback=progress_callback)
 
-    def _execute_process(self, script_path: str, args_json: str, env: Dict) -> Dict:
+    def _execute_process(self, script_path: str, args_json: str, env: Dict, progress_callback=None) -> Dict:
         """Executes an arbitrary executable."""
         cmd = [script_path]
-        return self._run_subprocess(cmd, args_json, env)
+        return self._run_subprocess(cmd, args_json, env, progress_callback)
 
-    def _run_subprocess(self, cmd: List[str], args_json: str, env: Dict) -> Dict:
+    def _run_subprocess(self, cmd: List[str], args_json: str, env: Dict, progress_callback=None) -> Dict:
         try:
             process = subprocess.Popen(
                 cmd,
@@ -178,19 +178,65 @@ class ActionExecutor:
                 stderr=subprocess.PIPE,
                 env=env,
                 text=True,
-                cwd=env["GENESIS_PLUGIN_PATH"]
+                cwd=env.get("GENESIS_PLUGIN_PATH", os.getcwd()),
+                bufsize=1 # Line buffered
             )
             
-            stdout, stderr = process.communicate(input=args_json, timeout=30)
+            # Send input
+            if args_json:
+                process.stdin.write(args_json)
+                process.stdin.close()
             
-            if process.returncode == 0:
+            stdout_lines = []
+            stderr_lines = []
+            
+            # Read stdout line by line
+            while True:
+                line = process.stdout.readline()
+                if not line:
+                    if process.poll() is not None:
+                        break
+                    continue
+                
+                stdout_lines.append(line)
+                
+                # Check for progress
+                if progress_callback and line.strip().startswith("{"):
+                    try:
+                        data = json.loads(line)
+                        if data.get("status") == "progress":
+                            progress_callback(data)
+                    except:
+                        pass
+            
+            # Capture stderr
+            stderr_output = process.stderr.read()
+            
+            return_code = process.wait()
+            full_stdout = "".join(stdout_lines)
+            
+            if return_code == 0:
                 try:
-                    output_data = json.loads(stdout)
+                    # Try to find the last JSON line as the result
+                    # Or parse the whole thing if it's one JSON
+                    output_data = None
+                    for line in reversed(stdout_lines):
+                        if line.strip().startswith("{"):
+                            try:
+                                output_data = json.loads(line)
+                                if output_data.get("status") != "progress":
+                                    break
+                            except:
+                                continue
+                    
+                    if not output_data:
+                        output_data = json.loads(full_stdout)
+                        
                     return {"status": "success", "output": output_data}
                 except json.JSONDecodeError:
-                    return {"status": "success", "output": stdout}
+                    return {"status": "success", "output": full_stdout}
             else:
-                return {"status": "error", "error": stderr or "Unknown Error", "exit_code": process.returncode}
+                return {"status": "error", "error": stderr_output or "Unknown Error", "exit_code": return_code}
 
         except subprocess.TimeoutExpired:
             process.kill()

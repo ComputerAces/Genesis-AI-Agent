@@ -13,7 +13,11 @@
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "Partial filename to search for"
+                        "description": "Regex pattern to search for in filenames"
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Root directory to search in (default: entire system)"
                     }
                 },
                 "required": [

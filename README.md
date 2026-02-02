@@ -44,6 +44,31 @@ This is a community-driven effort. Your code can help define the next generation
 
 4. **Open**: `http://127.0.0.1:5000`
 
+## 🧠 Why Qwen3 (0.6B)?
+
+You might wonder why we default to such a small model. The reason is simple: **Efficiency & Accessibility**.
+
+The lead developer of Genesis does currently not have access to a dedicated GPU. Optimizing for the Qwen3 0.6B model proves that the **Architecture** of Genesis (the Action Loops, Logic, and Plugin System) is robust enough to perform complex tasks even with a lightweight brain.
+
+**Think about it:**
+If Genesis is this powerful with a 0.6B model running on a CPU, imagine what it can do with:
+
+* **Qwen 4B / 7B / 14B / 72B**
+* **OpenAI GPT-4o** (Genesis support coming soon!)
+* **DeepSeek R1**
+
+The system is designed to scale. The intelligence is in the **Agentic Loop**, not just the LLM.
+
+### 🤝 Help Us Upgrade
+
+If you want to see Genesis running on top-tier hardware, consider **donating to help us buy a GPU**. This will allow us to:
+
+1. Test and support larger local models (7B+).
+2. Develop Vision and Image Generation features faster.
+3. Train custom LoRAs for better Tool Use.
+
+[**Donate via CashApp**](#support-the-project) to help power the next stage of evolution.
+
 ## Upgrading Models
 
 By default, Genesis is configured for lightweight models (like Qwen 0.5B/1.5B) to ensure it runs on most hardware.
@@ -56,6 +81,9 @@ To enable better, larger, or different models:
 3. Tell Antigravity to add it.
 
 It's that simple. The system is designed to be evolved *by* AI.
+
+> **Prefer doing it yourself?**
+> Check out the [Manual Integration Guide (Hard Edit)](docs/hardedit.md) to learn how to add providers the old-fashioned way.
 
 ## User & Admin System
 
