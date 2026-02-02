@@ -156,6 +156,7 @@ def update_history_entry(entry_id, content=None, thinking=None):
         elif thinking is not None:
             cursor.execute("UPDATE chat_items SET thinking = ? WHERE id = ?", (thinking, entry_id))
         
+        print(f"[DEBUG:DB] Updated Entry {entry_id}, RowCount={cursor.rowcount}, ContentLen={len(content) if content else 'None'}", flush=True)
         conn.commit()
         conn.close()
     except Exception as e:
@@ -173,6 +174,11 @@ def load_chat_items(chat_id):
     )
     rows = cursor.fetchall()
     conn.close()
+    if rows:
+        print(f"[DEBUG:DB] Loaded {len(rows)} items for {chat_id}. Last Item Len: {len(rows[-1][1]) if rows[-1][1] else 0}", flush=True)
+    else:
+        print(f"[DEBUG:DB] Loaded 0 items for {chat_id}", flush=True)
+        
     return [{"role": r[0], "content": r[1], "thinking": r[2], "timestamp": r[3]} for r in rows]
 
 # Deprecated

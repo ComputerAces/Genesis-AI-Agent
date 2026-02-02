@@ -613,8 +613,15 @@
                                 localStorage.setItem('lastChatId', currentChatId);
                                 loadChats();
                             }
-                        } else if (data.status === 'chat_title_updated') {
                             loadChats(); // Refresh list to show updated title
+                        } else if (data.status === 'action_detected') {
+                            // Show specific actions being run
+                            const actionNames = (data.actions || []).join(', ');
+                            if (assistantMsgDiv) {
+                                assistantMsgDiv.innerHTML = `<i class="fas fa-cogs fa-spin"></i> Running Actions: ${actionNames}...`;
+                                assistantMsgDiv.dataset.building = "true";
+                                chatContainer.scrollTop = chatContainer.scrollHeight;
+                            }
                         } else if (data.status === 'action_loop') {
                             // Update "Building..." status to show progress
                             const loopNum = data.loop || 1;
@@ -949,20 +956,20 @@
 
     <!-- Permission Modal -->
     <div id="permission-modal"
-        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:2000; align-items:center; justify-content:center;">
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); backdrop-filter: blur(5px); z-index:2000; align-items:center; justify-content:center;">
         <div
-            style="background:var(--bg-secondary); width:90%; max-width:500px; padding:2rem; border-radius:1rem; border:1px solid var(--border-color); box-shadow:0 10px 25px rgba(0,0,0,0.5);">
+            style="background:#ffffff; color:#1a1a1a; width:90%; max-width:500px; padding:2rem; border-radius:1rem; border:1px solid var(--border-color); box-shadow:0 10px 25px rgba(0,0,0,0.5);">
             <div style="text-align:center; margin-bottom:1.5rem;">
                 <i class="fas fa-shield-alt" style="font-size:3rem; color:var(--accent); margin-bottom:1rem;"></i>
-                <h2 style="margin:0; font-size:1.5rem;">Action Permission Required</h2>
-                <p style="opacity:0.8; margin-top:0.5rem;" id="perm-action-desc">The AI wants to execute an action.</p>
+                <h2 style="margin:0; font-size:1.5rem; color:#1a1a1a;">Action Permission Required</h2>
+                <p style="opacity:0.8; margin-top:0.5rem; color:#4a4a4a;" id="perm-action-desc">The AI wants to execute
+                    an action.</p>
             </div>
 
             <div
-                style="background:var(--bg-primary); padding:1rem; border-radius:0.5rem; font-family:'JetBrains Mono', monospace; font-size:0.85rem; margin-bottom:1.5rem; border:1px solid var(--border-color); overflow-x:auto;">
+                style="background:#f5f5f5; padding:1rem; border-radius:0.5rem; font-family:'JetBrains Mono', monospace; font-size:0.85rem; margin-bottom:1.5rem; border:1px solid #e0e0e0; overflow-x:auto;">
                 <span style="color:var(--accent); font-weight:600;" id="perm-action-name">action_name</span>
-                <pre id="perm-action-args"
-                    style="margin:0.5rem 0 0 0; color:var(--text-secondary); white-space:pre-wrap;"></pre>
+                <pre id="perm-action-args" style="margin:0.5rem 0 0 0; color:#333333; white-space:pre-wrap;"></pre>
             </div>
 
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">
@@ -975,7 +982,7 @@
 
             <button onclick="handlePermission('deny')"
                 style="width:100%; margin-top:0.75rem; padding:0.75rem; background:transparent; border:1px solid #ff4444; color:#ff4444; border-radius:0.5rem; cursor:pointer; font-weight:500;">
-                Deny Relationship
+                Deny Action
             </button>
         </div>
     </div>

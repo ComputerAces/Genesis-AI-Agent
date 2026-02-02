@@ -43,7 +43,17 @@ def main():
             for file in files:
                 if query.lower() in file.lower():
                     full_path = os.path.join(root, file)
-                    matches.append(full_path)
+                    # Get size
+                    try:
+                        size = os.path.getsize(full_path)
+                    except:
+                        size = 0
+                        
+                    matches.append({
+                        "name": file,
+                        "path": full_path.replace("\\", "/"),
+                        "size": size
+                    })
                     
             if len(matches) > 50: # Limit results
                 break

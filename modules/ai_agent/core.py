@@ -608,31 +608,63 @@ class AIAgent:
             # Inject system prompt at the beginning of history logic
             loop_history = format_history_for_prompt(loop_history, system_prompt)
             
-            # RESUME LOGIC
+            current_prompt = prompt # Default initialization
 
             # RESUME LOGIC
             if resume_action:
+                print(f"[DEBUG:Resume] Starting Resume Logic for chat_id={chat_id}", flush=True)
                 # Scan history for the last action request
                 last_msg = ""
+                print(f"[DEBUG:Resume] Loop History Size: {len(loop_history)}", flush=True)
+                if loop_history:
+                     print(f"[DEBUG:Resume] Last History Item: {loop_history[-1]}", flush=True)
+
                 for m in reversed(loop_history):
-                     if m['role'] == 'assistant':
-                         last_msg = m['content']
+                     # Skip empty messages (like the new placeholder we just created)
+                     if m.get('role') == 'assistant' and m.get('content', '').strip():
+                         last_msg = m.get('content', '')
                          break
                 
-                pattern = r'\[ACTION:\s*([a-zA-Z0-9_]+)\s*,\s*({.*?})\]'
-                matches = list(re.finditer(pattern, last_msg, re.DOTALL))
+                print(f"[DEBUG:Resume] Last Msg (First 500 chars): {last_msg[:500]}", flush=True)
                 
-                if matches:
+                found_resume_actions = []
+                from modules.utils import extract_json
+                json_data = extract_json(last_msg)
+                
+                if json_data and isinstance(json_data, dict) and "actions" in json_data:
+                    raw_actions = json_data["actions"]
+                    if isinstance(raw_actions, list):
+                        for ra in raw_actions:
+                            if "name" in ra:
+                                args = {}
+                                if "parameters" in ra:
+                                    params = ra["parameters"]
+                                    if isinstance(params, dict):
+                                        args = params
+                                    elif isinstance(params, list):
+                                        for p in params:
+                                            if "name" in p:
+                                                args[p["name"]] = p.get("value", "")
+                                
+                                found_resume_actions.append({
+                                    "name": ra["name"],
+                                    "args": args
+                                })
+                
+                print(f"[DEBUG:Resume] Found {len(found_resume_actions)} actions to resume.", flush=True)
+                
+                if found_resume_actions:
                      if db_entry_id: update_history_entry(db_entry_id, thinking=f"[Resuming Actions...]")
                      yield {"status": "content", "chunk": "\n\n[System] Resuming Actions...\n", "chat_id": chat_id}
                      
                      futures = []
                      future_map = {}
                      
-                     for match in matches:
-                         action_name = match.group(1)
+                     for act in found_resume_actions:
+                         action_name = act["name"]
                          try:
-                             action_args = json.loads(match.group(2))
+                             print(f"[DEBUG:Resume] preparing action: {action_name}", flush=True)
+                             action_args = act["args"]
                              action_def = self.action_registry.get_action(action_name)
                              
                              if action_def:
@@ -640,7 +672,10 @@ class AIAgent:
                                  f = self.thread_pool.submit(self.action_executor.execute, action_def, action_args, ctx)
                                  future_map[f] = action_name
                                  yield {"status": "content", "chunk": f"[Executing {action_name}...]\n", "chat_id": chat_id}
-                         except:
+                             else:
+                                 print(f"[DEBUG:Resume] Action definition not found for {action_name}", flush=True)
+                         except Exception as e:
+                             print(f"[DEBUG:Resume] Error preparing {action_name}: {e}", flush=True)
                              pass
 
                      # Wait for results
@@ -654,6 +689,14 @@ class AIAgent:
                                  exec_result = future.result()
                                  obs_text = json.dumps(exec_result.get("output", {})) if exec_result["status"] == "success" else f"Error: {exec_result.get('error')}"
                                  observations.append(f"Action '{name}' Result: {obs_text}")
+                                 
+                                 # Log to Database for History/Web UI
+                                 try:
+                                     from modules.db import save_chat_item
+                                     # Using system role to show in UI
+                                     save_chat_item(chat_id, "system", f"[Action Output: {name}] {obs_text}")
+                                 except Exception as e:
+                                     print(f"[DEBUG:Resume] Failed to log action result: {e}")
                                  
                                  action_status = "success" if exec_result["status"] == "success" else "error"
                                  yield {
@@ -681,12 +724,15 @@ class AIAgent:
                          # Update System Message in History
                          if loop_history and loop_history[0].get('role') == 'system':
                              loop_history[0]['content'] = new_sys_prompt
+                             # print(f"[DEBUG:Resume] Updated System Prompt with {len(observations)} observations", flush=True)
                          
                          # Set current prompt to trigger summary
                          current_prompt = "Actions executed. Please formulate the response."
                          current_loop = 1
-                     else:
-                         current_prompt = "Observation: No actions found to resume."
+                         print(f"[DEBUG:Resume] Resume complete. Switching to Loop", flush=True)
+                else:
+                     print(f"[DEBUG:Resume] No actions found to resume!", flush=True)
+                     current_prompt = prompt # Fallback
             
             else:
                 current_prompt = prompt
@@ -774,52 +820,112 @@ class AIAgent:
                             yield result
                 
                 # --- DETECT ACTIONS (PARALLEL) ---
-                matches = list(re.finditer(r'\[ACTION:\s*([a-zA-Z0-9_]+)\s*,\s*({.*?})\]', full_content_raw, re.DOTALL))
+                # --- DETECT ACTIONS (JSON) ---
+                from modules.utils import extract_json
                 
-                if matches:
-                    if db_entry_id: update_history_entry(db_entry_id, thinking=accumulated_thinking + f"\n[Executing {len(matches)} Action(s)...]")
-                    yield {"status": "content", "chunk": f"\n\n[System] Executing {len(matches)} actions...\n", "chat_id": chat_id}
+                found_actions = []
+                json_data = extract_json(full_content_raw)
+                
+                print(f"[DEBUG:Core] AI Response Content: {full_content_raw[:200]}...", flush=True)
+                
+                if json_data and isinstance(json_data, dict) and "actions" in json_data:
+                    raw_actions = json_data["actions"]
+                    print(f"[DEBUG:Core] Extracted JSON Actions: {raw_actions}", flush=True)
+                    
+                    if isinstance(raw_actions, list):
+                        for ra in raw_actions:
+                            if "name" in ra:
+                                # Convert params to dict (handle both Dict and List formats)
+                                args = {}
+                                if "parameters" in ra:
+                                    params = ra["parameters"]
+                                    if isinstance(params, dict):
+                                        args = params
+                                    elif isinstance(params, list):
+                                        for p in params:
+                                            if "name" in p:
+                                                args[p["name"]] = p.get("value", "")
+                                
+                                found_actions.append({
+                                    "name": ra["name"],
+                                    "args": args
+                                })
+                
+                if found_actions:
+                    if db_entry_id: update_history_entry(db_entry_id, thinking=accumulated_thinking + f"\n[Executing {len(found_actions)} Action(s)...]")
+                    
+                    # Notify UI about specific actions
+                    yield {
+                        "status": "action_detected",
+                        "actions": [a['name'] for a in found_actions],
+                        "chat_id": chat_id
+                    }
+
+                    yield {"status": "content", "chunk": f"\n\n[System] Executing {len(found_actions)} actions...\n", "chat_id": chat_id}
                     
                     # CHECK PERMISSIONS
                     from modules.permissions import check_permission, init_permissions_db
                     init_permissions_db()
                     
                     paused = False
-                    for match in matches:
-                        action_name = match.group(1)
+                    for act in found_actions:
+                        action_name = act["name"]
                         if not check_permission(str(user_id), action_name, chat_id=chat_id):
-                            try:
-                                args = json.loads(match.group(2))
-                            except:
-                                args = {}
                             yield {
                                 "status": "permission_required",
                                 "action_name": action_name,
-                                "action_args": args,
+                                "action_args": act["args"],
                                 "chat_id": chat_id
                             }
                             paused = True
-                            print(f"[DEBUG] Permission required for {action_name}")
-                            break # Only one permission request at a time for UI simplicity
+                            print(f"[DEBUG:Core] Permission required for {action_name}", flush=True)
+                            break # Only one permission request at a time
                     
                     if paused:
+                        # Force update the chat_item with the full content we have so far
+                        if db_entry_id:
+                            print(f"[DEBUG:Core] Perm Pause: Updating DB Entry {db_entry_id} with {len(full_content_raw)} chars", flush=True)
+                            update_history_entry(db_entry_id, content=full_content_raw)
+                        
+                        # Ensure we save the history before exiting, so Resume can find the action request!
+                        # The incremental update_history_entry handles the chat display, but let's be safe.
+                        print(f"[DEBUG:Core] Pausing for Permission. Saving history...", flush=True)
+                        try:
+                            from modules.db import save_raw_history
+                            save_raw_history(chat_id, {
+                                "timestamp": datetime.datetime.now().isoformat(),
+                                "chat_id": chat_id,
+                                "model_config": self.provider.model_cfg if hasattr(self.provider, 'model_cfg') else {},
+                                "system_prompt": system_prompt, 
+                                "history_context": active_history,
+                                "response": {
+                                    "role": "assistant",
+                                    "content": full_content_raw,
+                                    "thinking": accumulated_thinking
+                                },
+                                "user_id": user_id
+                            })
+                        except Exception as log_err:
+                            print(f"[Core] History Logging Failed (Permission Pause): {log_err}")
+
                         return # Stop generator
 
                     # PARALLEL EXECUTION
                     future_map = {}
-                    for match in matches:
-                        action_name = match.group(1)
+                    for act in found_actions:
+                        action_name = act["name"]
+                        action_args = act["args"]
                         try:
-                            action_args = json.loads(match.group(2))
+                            print(f"[DEBUG:Core] Executing Action: {action_name} Args: {action_args}", flush=True)
                             action_def = self.action_registry.get_action(action_name)
                             if action_def:
                                 ctx = {"user_id": user_id, "chat_id": chat_id}
                                 f = self.thread_pool.submit(self.action_executor.execute, action_def, action_args, ctx)
                                 future_map[f] = action_name
-                        except:
-                            pass
-                    
-                    observations = []
+                            else:
+                                print(f"[DEBUG:Core] Action {action_name} not found in registry", flush=True)
+                        except Exception as e:
+                            print(f"[DEBUG:Core] Error preparing action {action_name}: {e}", flush=True)
                     if future_map:
                         for future in as_completed(future_map):
                            name = future_map[future]
@@ -828,6 +934,13 @@ class AIAgent:
                                obs = json.dumps(exec_result.get("output", {})) if exec_result["status"] == "success" else f"Error: {exec_result.get('error')}"
                                observations.append(f"Action '{name}' Result: {obs}")
                                
+                               # Log to Database for History/Web UI
+                               try:
+                                   from modules.db import save_chat_item
+                                   save_chat_item(chat_id, "system", f"[Action Output: {name}] {obs}")
+                               except Exception as e:
+                                   print(f"[DEBUG:Core] Failed to log action result: {e}")
+
                                status = "success" if exec_result["status"] == "success" else "error"
                                yield {
                                     "status": "action_output",
@@ -871,7 +984,7 @@ class AIAgent:
                 
                 # NO ACTIONS FOUND - Final Response Analysis
                 # If we are expecting JSON, and we have a full buffer, let's try to parse it.
-                if return_json and (current_loop == max_loops or not matches):
+                if return_json and (current_loop == max_loops or not found_actions):
                     from modules.utils import extract_json
                     parsed = extract_json(full_content_raw)
                     

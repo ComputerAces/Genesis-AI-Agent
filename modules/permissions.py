@@ -12,7 +12,7 @@ SCOPE_ALWAYS = "always"
 
 def init_permissions_db():
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    db_path = os.path.join(base_dir, "data", "permissions.db")
+    db_path = os.path.join(base_dir, "data", "system.db")
     
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -41,7 +41,7 @@ def check_permission(user_id, action_name, chat_id=None):
     but for this implementation we might assume the caller handles the immediate 'once' grant by skipping check).
     """
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    db_path = os.path.join(base_dir, "data", "permissions.db")
+    db_path = os.path.join(base_dir, "data", "system.db")
     
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -85,7 +85,7 @@ def grant_permission(user_id, action_name, scope, chat_id=None):
         return # Ephemeral
         
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    db_path = os.path.join(base_dir, "data", "permissions.db")
+    db_path = os.path.join(base_dir, "data", "system.db")
     
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
