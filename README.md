@@ -12,6 +12,21 @@ We are currently in the "Baby" stage of development, but the potential is limitl
 
 If you believe in local, private, and powerful AI, join us in making Genesis a standard for personal AI agents.
 
+## 🧪 Help Us Test & Build Actions
+
+We need **YOUR** help to expand Genesis's capabilities. The Action System is modular, powerful, and ready for experimentation.
+
+### How You Can Help
+
+1. **Test Existing Actions**: Try running `search_files`, `system_info`, or `say_hello`. Push them to their limits and report any bugs.
+2. **Build New Actions**:
+    * Navigate to `data/plugins/`.
+    * Copy the structure of an existing plugin (like `search_files`).
+    * Create your own Python tools!
+3. **Feedback**: Tell us what Actions you want to see next. File management? Email? Home Automation?
+
+This is a community-driven effort. Your code can help define the next generation of Genesis.
+
 ## Quick Install
 
 1. **Install Python 3.10+**
@@ -46,8 +61,8 @@ It's that simple. The system is designed to be evolved *by* AI.
 
 Genesis features a secure **Role-Based Access Control (RBAC)** system.
 
-- **Users**: Private managed chat, personal memory, and personal plugins.
-- **Admins**: Full control over system settings, global history, prompts, and user accounts.
+* **Users**: Private managed chat, personal memory, and personal plugins.
+* **Admins**: Full control over system settings, global history, prompts, and user accounts.
 
 For full details on managing users and permissions, see the **[User Management Guide](docs/user_management.md)**.
 
@@ -55,9 +70,9 @@ For full details on managing users and permissions, see the **[User Management G
 
 For detailed instructions, please check the [docs](docs/) folder:
 
-- [Full Installation Guide](docs/full_install.md)
-- [Code Breakdown](docs/code_breakdown.md)
-- [Adding Actions / Plugins](docs/adding_actions.md)
+* [Full Installation Guide](docs/full_install.md)
+* [Code Breakdown](docs/code_breakdown.md)
+* [Adding Actions / Plugins](docs/adding_actions.md)
 
 ## Support the Project
 
@@ -69,7 +84,7 @@ If you enjoy Genesis and want to support its rapid development:
 
 Use of this software is subject to the terms in [LICENSE.md](LICENSE.md).
 
-- **Free** for personal, individual use.
-- **Paid License Required** for commercial or corporate use.
+* **Free** for personal, individual use.
+* **Paid License Required** for commercial or corporate use.
 
 Contact **<bradbford79@yahoo.com>** for commercial licensing inquiries.
