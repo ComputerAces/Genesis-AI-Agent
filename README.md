@@ -91,4 +91,4 @@ Use of this software is subject to the terms in [LICENSE.md](LICENSE.md).
 * **Free** for personal, individual use.
 * **Paid License Required** for commercial or corporate use.
 
-Contact **<bradbford79@yahoo.com>** for commercial licensing inquiries.
+Contact **<compaces79@gmail.com>** for commercial licensing inquiries.
