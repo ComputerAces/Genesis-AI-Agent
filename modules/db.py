@@ -21,7 +21,8 @@ def init_db():
         username TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
         email TEXT UNIQUE,
-        role TEXT NOT NULL DEFAULT 'user'
+        role TEXT NOT NULL DEFAULT 'user',
+        preferred_model TEXT
     )
     ''')
 
@@ -62,17 +63,23 @@ def init_db():
         FOREIGN KEY (chat_id) REFERENCES chats(id)
     )
     ''')
-
+    
     # Create keys table (Encrypted API Keys)
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS keys (
-        provider TEXT PRIMARY KEY,
-        api_key TEXT NOT NULL,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        provider TEXT UNIQUE NOT NULL,
+        api_key_enc TEXT NOT NULL
     )
     ''')
     
     # MIGRATIONS
+    cursor.execute("PRAGMA table_info(users)")
+    user_columns = [row[1] for row in cursor.fetchall()]
+    if "preferred_model" not in user_columns:
+        print("[DB] Migrating: Adding 'preferred_model' column to users table...")
+        cursor.execute("ALTER TABLE users ADD COLUMN preferred_model TEXT")
+
     cursor.execute("PRAGMA table_info(history)")
     columns = [row[1] for row in cursor.fetchall()]
     if "thinking" not in columns:
@@ -414,10 +421,16 @@ def save_api_key(provider, raw_key):
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        cursor.execute(
-            "INSERT OR REPLACE INTO keys (provider, api_key, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
-            (provider, encrypted)
-        )
+        
+        # Check if exists
+        cursor.execute("SELECT id FROM keys WHERE provider = ?", (provider,))
+        row = cursor.fetchone()
+        
+        if row:
+             cursor.execute("UPDATE keys SET api_key_enc = ? WHERE provider = ?", (encrypted, provider))
+        else:
+             cursor.execute("INSERT INTO keys (provider, api_key_enc) VALUES (?, ?)", (provider, encrypted))
+
         conn.commit()
         conn.close()
         return True
@@ -434,7 +447,7 @@ def get_api_key(provider):
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        cursor.execute("SELECT api_key FROM keys WHERE provider = ?", (provider,))
+        cursor.execute("SELECT api_key_enc FROM keys WHERE provider = ?", (provider,))
         row = cursor.fetchone()
         conn.close()
         

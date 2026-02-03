@@ -11,7 +11,7 @@ keys_bp = Blueprint('keys', __name__)
 def save_key():
     data = request.json
     provider = data.get("provider")
-    key = data.get("key")
+    key = data.get("api_key") # Matched frontend naming
     
     if not provider or not key:
         return jsonify({"error": "Missing provider or key"}), 400

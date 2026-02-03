@@ -291,6 +291,24 @@
                         </div>
                     </div>
                 `;
+
+                // Add API Key Section for Cloud Providers
+                if (m.type === 'gemini' || m.type === 'openai') {
+                    card.innerHTML += `
+                    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+                        <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); display:block; margin-bottom:0.5rem;">
+                            <i class="fas fa-key"></i> API Key (${m.type})
+                        </label>
+                        <div style="display:flex; gap:0.5rem;">
+                            <input type="password" id="apikey-${idx}" placeholder="Set new API key..." class="model-select" style="flex:1;">
+                            <button onclick="saveModelKey('${m.type}', 'apikey-${idx}')" style="background:var(--secondary); color:white; border:none; padding:0.5rem 1rem; border-radius:0.5rem; cursor:pointer;">
+                                Set Key
+                            </button>
+                        </div>
+                    </div>
+                    `;
+                }
+
                 list.appendChild(card);
             });
         }
@@ -402,6 +420,28 @@
                 setTimeout(() => location.reload(), 5000);
             }
         };
+
+        async function saveModelKey(provider, inputId) {
+            const val = document.getElementById(inputId).value;
+            if (!val) { alert('Please enter a key'); return; }
+
+            try {
+                const res = await fetch('/api/keys', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ provider: provider, api_key: val })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    alert('Key saved successfully!');
+                    document.getElementById(inputId).value = '';
+                } else {
+                    alert('Error: ' + (data.error || data.message || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Error saving key: ' + e);
+            }
+        }
 
         // Init
         const savedTheme = localStorage.getItem('theme') || 'dark';

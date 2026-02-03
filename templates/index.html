@@ -729,6 +729,24 @@
                             }
                         } else if (data.status === 'permission_required') {
                             showPermissionModal(data);
+                        } else if (data.status === 'request_key') {
+                            // Open Key Modal
+                            const keyModal = document.getElementById('key-modal');
+                            const keyStatus = document.getElementById('key-status');
+                            const keyProviderSelect = document.getElementById('key-provider');
+
+                            // Pre-select provider
+                            if (data.provider) {
+                                keyProviderSelect.value = data.provider;
+                            }
+
+                            keyModal.style.display = 'flex';
+                            keyStatus.innerHTML = `<span style="color:var(--accent)"><i class="fas fa-exclamation-triangle"></i> ${data.message}</span>`;
+
+                            // Update status but keep the bubble open for resumption
+                            if (assistantMsgDiv) {
+                                assistantMsgDiv.innerHTML = `<i class="fas fa-key" style="color:#ffc107"></i> Waiting for API Key...`;
+                            }
                         }
                     }
                 }
@@ -1018,8 +1036,81 @@
             }
         });
 
+        async function saveApiKey() {
+            const provider = document.getElementById('key-provider').value;
+            const key = document.getElementById('key-value').value;
+            const statusDiv = document.getElementById('key-status');
+
+            if (!key) {
+                statusDiv.innerHTML = '<span style="color:#dc3545">Please enter a key.</span>';
+                return;
+            }
+
+            statusDiv.innerHTML = '<span style="color:#0dcaf0">Saving...</span>';
+
+            try {
+                const response = await fetch('/api/keys', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ provider: provider, api_key: key })
+                });
+
+                const data = await response.json();
+                if (data.status === 'success') {
+                    statusDiv.innerHTML = '<span style="color:#198754">Key saved successfully!</span>';
+                    setTimeout(() => {
+                        document.getElementById('key-modal').style.display = 'none';
+                        document.getElementById('key-value').value = '';
+                    }, 1000);
+                } else {
+                    statusDiv.innerHTML = `<span style="color:#dc3545">Error: ${data.message}</span>`;
+                }
+            } catch (err) {
+                statusDiv.innerHTML = `<span style="color:#dc3545">Error: ${err.message}</span>`;
+            }
+        }
         init();
     </script>
+
+    <!-- Key Management Modal -->
+    <div id="key-modal"
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); backdrop-filter: blur(5px); z-index:2000; align-items:center; justify-content:center;">
+        <div
+            style="background:#ffffff; color:#1a1a1a; width:90%; max-width:500px; padding:2rem; border-radius:1rem; border:1px solid var(--border-color); box-shadow:0 10px 25px rgba(0,0,0,0.5);">
+            <div style="text-align:center; margin-bottom:1.5rem;">
+                <i class="fas fa-key" style="font-size:3rem; color:var(--accent); margin-bottom:1rem;"></i>
+                <h2 style="margin:0; font-size:1.5rem; color:#1a1a1a;">Manage API Keys</h2>
+                <p style="opacity:0.8; margin-top:0.5rem; color:#4a4a4a;">Enter your API Key for the selected provider.
+                </p>
+                <div id="key-status" style="margin-bottom: 1rem; font-weight: bold;"></div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 1rem;">
+                <label for="key-provider"
+                    style="display:block; margin-bottom:0.5rem; font-weight:600; color:#333;">Provider</label>
+                <select id="key-provider" class="form-control"
+                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:0.5rem;">
+                    <option value="gemini">Google Gemini</option>
+                    <option value="openai">OpenAI (Coming Soon)</option>
+                </select>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 1.5rem;">
+                <label for="key-value" style="display:block; margin-bottom:0.5rem; font-weight:600; color:#333;">API
+                    Key</label>
+                <input type="password" id="key-value" class="form-control" placeholder="Enter API Key..."
+                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:0.5rem;">
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">
+                <button class="perm-btn" onclick="document.getElementById('key-modal').style.display='none'"
+                    style="background:#f5f5f5; color:#333; border:1px solid #ccc; padding:0.75rem; border-radius:0.5rem; cursor:pointer;">Cancel</button>
+                <button class="perm-btn" onclick="saveApiKey()"
+                    style="background:var(--accent); color:#fff; border:none; padding:0.75rem; border-radius:0.5rem; cursor:pointer; font-weight:600;">Save
+                    Key</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Permission Modal -->
     <div id="permission-modal"

@@ -95,7 +95,7 @@ class QwenProvider:
             history = [{"role": "user", "content": prompt}]
         
         # Ensure latest prompt is in history if not already there
-        if not history or history[-1]["content"] != prompt:
+        if prompt and (not history or history[-1]["content"] != prompt):
             history.append({"role": "user", "content": prompt})
 
         # Inject System Prompt transiently for the model template
@@ -114,6 +114,7 @@ class QwenProvider:
             enable_thinking=use_thinking
         )
 
+        print(f"[DEBUG:Qwen] Prompt Start: {text[:500]}...", flush=True)
         model_inputs = self.tokenizer([text], return_tensors="pt").to(self.device)
         streamer = TextIteratorStreamer(self.tokenizer, skip_prompt=True, skip_special_tokens=False)
 

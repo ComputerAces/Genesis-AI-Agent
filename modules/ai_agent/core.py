@@ -20,17 +20,72 @@ class AIAgent:
     def __init__(self, **kwargs):
         self.model_cfg = get_active_model_settings()
         if not self.model_cfg:
-            raise ValueError("No active model found in settings.")
+            print("[WARN] No active model setting found. Will load on demand.")
             
-        provider_type = self.model_cfg.get("type", "qwen")
-        model_name = self.model_cfg.get("name")
+        # Provider Cache: model_id -> provider_instance
+        self.providers = {}
+        
+    def _get_provider(self, model_id=None):
+        """
+        Retrieves or instantiates a provider for the given model_id.
+        If model_id is None, uses the global default from settings.
+        """
+        from modules.config import get_active_model_settings, load_settings
+        
+        # 1. Resolve Model Configuration
+        target_cfg = None
+        settings = load_settings()
+        
+        if not model_id:
+             model_id = settings.get("active_model")
+        
+        # Find config for this ID
+        for m in settings.get("models", []):
+            if m["id"] == model_id:
+                target_cfg = m
+                break
+        
+        if not target_cfg:
+            # Fallback to first if still failing
+            if settings.get("models"):
+                target_cfg = settings["models"][0]
+                model_id = target_cfg["id"]
+        
+        if not target_cfg:
+            raise ValueError("No model configuration found.")
+
+        # 2. Check Cache
+        if model_id in self.providers:
+            return self.providers[model_id]
+
+        # 3. Instantiate
+        provider_type = target_cfg.get("type", "qwen")
+        model_name = target_cfg.get("name")
+        
+        print(f"[Core] Loading Provider for {model_id} ({provider_type})...")
         
         if provider_type == "qwen":
-            self.provider = QwenProvider(model_name=model_name, model_cfg=self.model_cfg, **kwargs)
+            instance = QwenProvider(model_name=model_name, model_cfg=target_cfg)
         elif provider_type == "gemini":
-            self.provider = GeminiProvider(model_name=model_name, model_cfg=self.model_cfg, **kwargs)
+            instance = GeminiProvider(model_name=model_name, model_cfg=target_cfg)
         else:
             raise ValueError(f"Unsupported provider: {provider_type}")
+            
+        self.providers[model_id] = instance
+        return instance
+    
+    @property
+    def provider(self):
+        # Legacy property for backward compatibility, returns default active
+        return self._get_provider()
+
+    def __init__(self, **kwargs):
+        self.model_cfg = get_active_model_settings()
+        self.providers = {} 
+        
+        # Legacy: Check for specific forced init
+        # if self.model_cfg:
+        #      self._get_provider(self.model_cfg["id"])
         
         self.priority_map = {
             "low": psutil.IDLE_PRIORITY_CLASS if os.name == 'nt' else 19,
@@ -106,7 +161,64 @@ class AIAgent:
              system_prompt = prompts.get(prompt_id, "")
 
 
+        if not system_prompt:
+             prompts = load_prompts()
+             system_prompt = prompts.get(prompt_id, "")
+
+        # --- RESOLVE PROVIDER ---
         user_id = get_chat_owner(chat_id)
+        current_provider = None
+        
+        # Try to get User's preferred model
+        preferred_model = None
+        if user_id:
+            from modules.db import init_db # Ensure db
+            import sqlite3
+            # We need a direct DB read here. 
+            # Ideally this should be a helper in db.py: get_user_preference(user_id)
+            try:
+                base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                db_path = os.path.join(base_dir, "data", "system.db")
+                conn = sqlite3.connect(db_path)
+                cursor = conn.cursor()
+                cursor.execute("SELECT preferred_model FROM users WHERE id = ?", (user_id,))
+                row = cursor.fetchone()
+                conn.close()
+                if row and row[0]:
+                    preferred_model = row[0]
+            except Exception as e:
+                print(f"[Core] Error fetching user preference: {e}")
+
+        try:
+             current_provider = self._get_provider(preferred_model) 
+        except Exception as e:
+             print(f"[Core] Error loading preferred provider '{preferred_model}': {e}. Falling back.")
+             current_provider = self._get_provider(None)
+
+        # --- GEMINI KEY CHECK (Context Aware) ---
+        if isinstance(current_provider, GeminiProvider) and not current_provider.api_key:
+             print("[Core] Gemini Key Required. Requesting from UI...", flush=True)
+             yield {
+                 "status": "request_key",
+                 "provider": "gemini",
+                 "message": "Gemini API Key is missing. Please enter it to continue."
+             }
+             
+             # Polling Loop (Wait for Key)
+             import time
+             for _ in range(60): # Wait 60 seconds max
+                 time.sleep(1)
+                 from modules.db import get_api_key
+                 if get_api_key("gemini"):
+                     current_provider.api_key = get_api_key("gemini")
+                     import google.generativeai as genai
+                     genai.configure(api_key=current_provider.api_key)
+                     current_provider.model = genai.GenerativeModel(current_provider.model_name)
+                     yield {"status": "info", "message": "Key received. Resuming..."}
+                     break
+             else:
+                 yield {"status": "error", "error": "Timed out waiting for API Key."}
+                 return
         
         # Priority Handling
         p = psutil.Process(os.getpid())
@@ -115,7 +227,7 @@ class AIAgent:
             if os.name == 'nt':
                  p.nice(self.priority_map.get(priority.lower(), psutil.NORMAL_PRIORITY_CLASS))
             else:
-                 p.nice(self.priority_map.get(priority.lower(), 0))
+                p.nice(self.priority_map.get(priority.lower(), 0))
         except:
             pass
 
@@ -187,18 +299,20 @@ class AIAgent:
             loop_history = format_history_for_prompt(loop_history, system_prompt)
             
             current_prompt = prompt # Default initialization
+            json_data = None # Ensure defined for loop scope
+            found_resume_actions = [] # Ensure defined for loop scope
+            accumulated_thinking = "" # Capture thinking output
 
             # RESUME LOGIC
             if resume_action:
                 print(f"[DEBUG:Resume] Starting Resume Logic for chat_id={chat_id}", flush=True)
                 # Scan history for the last action request
                 last_msg = ""
-                print(f"[DEBUG:Resume] Loop History Size: {len(loop_history)}", flush=True)
                 if loop_history:
-                     print(f"[DEBUG:Resume] Last History Item: {loop_history[-1]}", flush=True)
+                     pass
 
                 for m in reversed(loop_history):
-                     # Skip empty messages (like the new placeholder we just created)
+                     # Skip empty messages
                      if m.get('role') == 'assistant' and m.get('content', '').strip():
                          last_msg = m.get('content', '')
                          break
@@ -208,6 +322,128 @@ class AIAgent:
                 found_resume_actions = []
                 from modules.utils import extract_json
                 json_data = extract_json(last_msg)
+                
+                if json_data:
+                    # Check for single action object
+                    if isinstance(json_data, dict) and "action" in json_data:
+                        found_resume_actions.append(json_data)
+                    # Check for list of actions
+                    elif isinstance(json_data, list):
+                        for item in json_data:
+                            if isinstance(item, dict) and "action" in item:
+                                found_resume_actions.append(item)
+                    # Check for old format (actions wrapper)
+                    elif isinstance(json_data, dict) and "actions" in json_data:
+                        acts = json_data["actions"]
+                        if isinstance(acts, list):
+                            found_resume_actions.extend(acts)
+
+                if found_resume_actions:
+                    print(f"[DEBUG:Resume] Found {len(found_resume_actions)} actions to resume.", flush=True)
+                    # We have actions to execute. Jump directly to action execution phase.
+                    # We simulate the model having just outputted this.
+                    full_content = last_msg
+                    # Skip generation, go to processing
+                    # We need to ensure we are in the loop context
+                    current_loop = 1 
+                else:
+                     print("[DEBUG:Resume] No actions found to resume.", flush=True)
+                     resume_action = False # Fallback to normal generation
+
+            # --- GENERATION LOOP ---
+            while current_loop <= max_loops:
+                full_content = ""
+                # Reset thinking for this turn if we want to capture it freshly, 
+                # OR keep it accumulating? Usually per-turn thinking.
+                # If we accumulate across loops (Action -> Think -> Action), we might want a list?
+                # For now, let's reset it per generation to avoid duplicates.
+                # BUT the variable MUST be available for the += operation.
+                # If I defined it outside, it should be fine.
+                # However, if I define it HERE, it shadows the outer one, which is fine for the loop.
+                # But I need it available for the specific `save_raw_history` at the END of the function.
+                # So I should use a different variable name locally or ensure the outer one is used.
+                # Actually, `accumulated_thinking` at the end wants the LAST thinking? Or all of it?
+                # Probably the last one.
+                pass
+                
+                # If we are NOT resuming, we generate text
+                if not resume_action:
+                    # 1. Prepare Prompt
+                    if current_loop == 0:
+                        prompt_for_model = current_prompt
+                        if not prompt_for_model:
+                             prompt_for_model = "Continue processing based on the previous context."
+                    else:
+                        prompt_for_model = "Continue processing based on the action output."
+
+                    # Ensure variable is ready for +=
+                    if 'accumulated_thinking' not in locals():
+                        accumulated_thinking = ""
+
+                    # 2. History Handling
+                    # History for provider: deeply copy looped history
+                    history_for_provider = [
+                        {"role": m["role"], "content": m["content"]} 
+                        for m in loop_history 
+                        if m.get("role") != "system"
+                    ]
+                    
+                    # Current System Prompt
+                    current_sys_prompt = system_prompt 
+                    
+                    # Generate Response
+                    # Use thinking only if requested AND it's the first loop (or user wants it always?)
+                    # For now, let's respect the flag passed to ask_stream.
+                    # Qwen provider checks if it supports it.
+                    try:
+                        generator = current_provider.generate(
+                            prompt=prompt_for_model, 
+                            use_thinking=use_thinking, 
+                            stop_event=stop_event,
+                            history_override=history_for_provider,
+                            system_prompt=current_sys_prompt
+                        )
+                        
+                        # Stream it
+                        for chunk in generator:
+                            # Check for dict (status update) or string (content)
+                            if isinstance(chunk, dict):
+                                if chunk.get("status") == "thinking":
+                                    accumulated_thinking += chunk.get("chunk", "")
+                                elif chunk.get("status") == "thinking_finished":
+                                    # Ensure we captured everything
+                                    if chunk.get("thinking"): 
+                                        accumulated_thinking = chunk.get("thinking")
+                                
+                                yield chunk
+                            else:
+                                full_content += chunk
+                                yield {
+                                    "status": "stream",
+                                    "content": chunk,
+                                    "chat_id": chat_id
+                                }
+                                
+                    except Exception as e:
+                        print(f"[Core] Generation Error: {e}")
+                        yield {"status": "error", "error": str(e)}
+                        return
+                
+                # Reset resume flag after first pass check
+                resume_action = False
+                
+                # [Optimization] Update History Immediately with Assistant Response
+                # This ensures if we crash or stop, the response is saved.
+                # However, for actions, we might want to append AFTER we confirm? 
+                # No, standard flow is: User -> Assistant (Call) -> Tool (Result) -> Assistant (Answer)
+                
+                if full_content.strip():
+                     loop_history.append({"role": "assistant", "content": full_content})
+                     # Save to DB? We usually save at the end of the turn, but for safety:
+                     # save_chat_item(... assistant ...) - omitting for speed, we save below.
+
+                # --- 3. RESPONSE ANALYSIS & ACTION EXTRACTION ---
+                # ... (Next block handles this)
                 
                 if json_data and isinstance(json_data, dict) and "actions" in json_data:
                     raw_actions = json_data["actions"]

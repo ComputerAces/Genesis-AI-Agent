@@ -91,6 +91,9 @@ class GeminiProvider:
             update_token_usage(self.model_cfg.get("id", "gemini"), input_tokens, output_tokens)
             
         except Exception as e:
+            print(f"[GeminiProvider] Error: {e}")
+            import traceback
+            traceback.print_exc()
             yield {"status": "error", "error": f"Gemini Error: {str(e)}"}
 
     def clear_history(self, parent_id=None):
