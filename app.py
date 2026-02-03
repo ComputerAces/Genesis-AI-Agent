@@ -41,6 +41,9 @@ app.register_blueprint(chat_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(ext_bp)
 
+from modules.routes.keys import keys_bp
+app.register_blueprint(keys_bp)
+
 # Start Task Scheduler
 from modules.tasks import get_scheduler
 get_scheduler().start()

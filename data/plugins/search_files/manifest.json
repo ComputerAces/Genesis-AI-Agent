@@ -4,6 +4,7 @@
     "version": "1.0.0",
     "description": "Searches for files by partial name match and returns their paths.",
     "author": "Genesis",
+    "maker": "Computer Aces",
     "actions": [
         {
             "name": "search_files",
@@ -17,7 +18,7 @@
                     },
                     "path": {
                         "type": "string",
-                        "description": "Root directory to search in (default: entire system)"
+                        "description": "Root directory to search in. Use '/' or '\\\\' to search ALL available drives on Windows."
                     }
                 },
                 "required": [

@@ -3,6 +3,7 @@
   "name": "System Information",
   "version": "1.0.0",
   "description": "Gets the system RAM/CPU usage, along with system name.",
+  "maker": "Computer Aces",
   "actions": [
     {
       "name": "system_info",

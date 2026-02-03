@@ -4,11 +4,34 @@ import subprocess
 import sys
 import logging
 import venv
+import threading
 from typing import Dict, Any, Optional, List
 
 class ActionExecutor:
     def __init__(self):
         self.logger = logging.getLogger("ActionExecutor")
+        self.active_processes = {} # map execution_id -> process
+        self.active_processes_lock = threading.Lock()
+
+    def cancel_action(self, execution_id: str):
+        """Cancels a running action by its execution_id."""
+        with self.active_processes_lock:
+            process = self.active_processes.get(execution_id)
+            if process:
+                self.logger.info(f"Cancelling action execution: {execution_id}")
+                try:
+                    process.terminate() # Try graceful first
+                    # We don't wait here because execute() is waiting
+                except Exception as e:
+                    self.logger.error(f"Error cancelling process: {e}")
+                    try:
+                        process.kill() # Force kill
+                    except:
+                        pass
+                return True
+            else:
+                self.logger.warning(f"Attempted to cancel unknown execution_id: {execution_id}")
+                return False
 
     def _ensure_plugin_venv(self, plugin_path: str) -> Optional[str]:
         """
@@ -97,6 +120,10 @@ class ActionExecutor:
         # Pass arguments as JSON string
         args_json = json.dumps(args)
         env["ACTION_ARGS"] = args_json
+        
+        # New: Pass Execution ID for process tracking
+        if "execution_id" in context:
+            env["GENESIS_EXECUTION_ID"] = context["execution_id"]
 
         self.logger.info(f"Executing {action_def['spec']['name']} ({action_type})")
 
@@ -170,6 +197,8 @@ class ActionExecutor:
         return self._run_subprocess(cmd, args_json, env, progress_callback)
 
     def _run_subprocess(self, cmd: List[str], args_json: str, env: Dict, progress_callback=None) -> Dict:
+        execution_id = env.get("GENESIS_EXECUTION_ID")
+        
         try:
             process = subprocess.Popen(
                 cmd,
@@ -182,13 +211,16 @@ class ActionExecutor:
                 bufsize=1 # Line buffered
             )
             
+            if execution_id:
+                with self.active_processes_lock:
+                    self.active_processes[execution_id] = process
+            
             # Send input
             if args_json:
                 process.stdin.write(args_json)
                 process.stdin.close()
             
             stdout_lines = []
-            stderr_lines = []
             
             # Read stdout line by line
             while True:
@@ -204,7 +236,7 @@ class ActionExecutor:
                 if progress_callback and line.strip().startswith("{"):
                     try:
                         data = json.loads(line)
-                        if data.get("status") == "progress":
+                        if data.get("status") in ["progress", "match"]:
                             progress_callback(data)
                     except:
                         pass
@@ -215,6 +247,15 @@ class ActionExecutor:
             return_code = process.wait()
             full_stdout = "".join(stdout_lines)
             
+            # Cleanup registration
+            if execution_id:
+                with self.active_processes_lock:
+                    if execution_id in self.active_processes:
+                        del self.active_processes[execution_id]
+            
+            # Check if it was cancelled (SIGTERM/SIGKILL often result in non-zero)
+            # Or if we just want to return whatever we got.
+            
             if return_code == 0:
                 try:
                     # Try to find the last JSON line as the result
@@ -223,23 +264,36 @@ class ActionExecutor:
                     for line in reversed(stdout_lines):
                         if line.strip().startswith("{"):
                             try:
-                                output_data = json.loads(line)
-                                if output_data.get("status") != "progress":
+                                candidate = json.loads(line)
+                                if candidate.get("status") not in ["progress", "match"]:
+                                    output_data = candidate
                                     break
                             except:
                                 continue
                     
                     if not output_data:
-                        output_data = json.loads(full_stdout)
+                        # Maybe it is just one big JSON
+                        try:
+                            output_data = json.loads(full_stdout)
+                        except:
+                            # If we can't parse it, and we have lines, maybe it's just text
+                            # check if we had matches during progress
+                            pass
                         
-                    return {"status": "success", "output": output_data}
+                    return {"status": "success", "output": output_data if output_data else full_stdout}
                 except json.JSONDecodeError:
                     return {"status": "success", "output": full_stdout}
             else:
-                return {"status": "error", "error": stderr_output or "Unknown Error", "exit_code": return_code}
+                # Even if error/cancelled, return partial output if useful
+                return {"status": "error", "error": stderr_output or f"Process exited with code {return_code}", "exit_code": return_code, "partial_output": full_stdout}
 
         except subprocess.TimeoutExpired:
             process.kill()
             return {"status": "error", "error": "Execution timed out"}
         except Exception as e:
+            # ensure cleanup on crash
+            if execution_id:
+                with self.active_processes_lock:
+                    if execution_id in self.active_processes:
+                        del self.active_processes[execution_id]
             return {"status": "error", "error": str(e)}

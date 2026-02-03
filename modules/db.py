@@ -62,6 +62,15 @@ def init_db():
         FOREIGN KEY (chat_id) REFERENCES chats(id)
     )
     ''')
+
+    # Create keys table (Encrypted API Keys)
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS keys (
+        provider TEXT PRIMARY KEY,
+        api_key TEXT NOT NULL,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+    ''')
     
     # MIGRATIONS
     cursor.execute("PRAGMA table_info(history)")
@@ -390,4 +399,48 @@ def save_raw_history(chat_id, data_dict):
         return row_id
     except Exception as e:
         print(f"[Error:DB] Error saving raw history: {e}")
+        return None
+
+def save_api_key(provider, raw_key):
+    """Encrypts and saves an API key."""
+    from modules.security import encrypt_value
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    db_path = os.path.join(base_dir, "data", "system.db")
+    
+    encrypted = encrypt_value(raw_key)
+    if not encrypted:
+        return False
+        
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR REPLACE INTO keys (provider, api_key, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
+            (provider, encrypted)
+        )
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"[Error:DB] Failed to save API key: {e}")
+        return False
+
+def get_api_key(provider):
+    """Retrieves and decrypts an API key."""
+    from modules.security import decrypt_value
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    db_path = os.path.join(base_dir, "data", "system.db")
+    
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT api_key FROM keys WHERE provider = ?", (provider,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            return decrypt_value(row[0])
+        return None
+    except Exception as e:
+        print(f"[Error:DB] Failed to get API key: {e}")
         return None

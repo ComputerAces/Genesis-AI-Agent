@@ -84,3 +84,18 @@ def get_history():
     chat_id = request.args.get("chat_id")
     history = agent.get_history(chat_id=chat_id)
     return jsonify(history)
+
+@chat_bp.route("/api/action/cancel", methods=["POST"])
+@login_required
+def cancel_action_api():
+    """Cancels the currently running action for a specific chat."""
+    data = request.json
+    chat_id = data.get("chat_id")
+    if not chat_id:
+        return jsonify({"status": "error", "error": "Missing chat_id"}), 400
+    
+    success = agent.cancel_current_action(chat_id)
+    if success:
+        return jsonify({"status": "success", "message": "Action cancelled"})
+    else:
+        return jsonify({"status": "error", "message": "No active action found for this chat"}), 404

@@ -31,11 +31,19 @@
         }
       },
       "token_usage": {
-        "input": 30002,
-        "output": 14396
+        "input": 35636,
+        "output": 16548
       },
       "type": "qwen",
       "use_yarn": true
+    },
+    {
+      "id": "gemini-flash-latest",
+      "name": "gemini-flash-latest",
+      "type": "gemini",
+      "history_ratio": 0.8,
+      "input_size": 16384,
+      "output_size": 8192
     }
   ],
   "server": {

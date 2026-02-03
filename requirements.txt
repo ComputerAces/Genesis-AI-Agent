@@ -14,3 +14,5 @@ diffusers
 huggingface-hub
 protobuf
 accelerate
+google-generativeai
+cryptography

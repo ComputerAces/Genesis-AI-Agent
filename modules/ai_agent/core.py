@@ -1,4 +1,5 @@
 from .providers.qwen_provider import QwenProvider
+from .providers.gemini_provider import GeminiProvider
 import threading
 from concurrent.futures import wait, FIRST_COMPLETED
 import queue
@@ -26,6 +27,8 @@ class AIAgent:
         
         if provider_type == "qwen":
             self.provider = QwenProvider(model_name=model_name, model_cfg=self.model_cfg, **kwargs)
+        elif provider_type == "gemini":
+            self.provider = GeminiProvider(model_name=model_name, model_cfg=self.model_cfg, **kwargs)
         else:
             raise ValueError(f"Unsupported provider: {provider_type}")
         
@@ -50,8 +53,20 @@ class AIAgent:
         self.active_tasks = {}
         self.active_tasks_lock = threading.Lock()
         
+        # Track Active Execution IDs for Cancellation: chat_id -> execution_id
+        self.active_action_ids = {} 
+        self.active_action_ids_lock = threading.Lock()
+        
         self.processor_thread = threading.Thread(target=self._main_processor, daemon=True)
         self.processor_thread.start()
+
+    def cancel_current_action(self, chat_id):
+        """Cancels the currently running action for a specific chat."""
+        with self.active_action_ids_lock:
+            execution_id = self.active_action_ids.get(chat_id)
+            if execution_id:
+                return self.action_executor.cancel_action(execution_id)
+        return False
 
     def _broadcast(self, chat_id, data):
         with self.active_tasks_lock:
@@ -237,10 +252,17 @@ class AIAgent:
                              action_def = self.action_registry.get_action(action_name)
                              
                              if action_def:
-                                 ctx = {"user_id": user_id, "chat_id": chat_id}
+                                 # Generate and Track Execution ID
+                                 execution_id = str(uuid.uuid4())
+                                 with self.active_action_ids_lock:
+                                     self.active_action_ids[chat_id] = execution_id
+                                 
+                                 ctx = {"user_id": user_id, "chat_id": chat_id, "execution_id": execution_id}
+                                 
                                  f = self.thread_pool.submit(self.action_executor.execute, action_def, action_args, ctx, make_cb(action_name))
                                  future_map[f] = action_name
                                  pending.append(f)
+                                 
                                  yield {"status": "content", "chunk": f"[Executing {action_name}...]\n", "chat_id": chat_id}
                              else:
                                  print(f"[DEBUG:Resume] Action definition not found for {action_name}", flush=True)
@@ -266,6 +288,16 @@ class AIAgent:
                                  if status_msg:
                                     # Yield progress chunk directly to chat stream
                                     yield {"status": "content", "chunk": f"[{msg['name']} Progress]: {status_msg}\n", "chat_id": chat_id}
+                                 
+                                 # Handle Action Update (Match Found)
+                                 if "status" in msg["data"] and msg["data"]["status"] == "match":
+                                     yield {
+                                         "status": "action_update",
+                                         "type": "match",
+                                         "data": msg["data"],
+                                         "chat_id": chat_id
+                                     }
+                                     
                              except:
                                  break
                          
@@ -279,6 +311,17 @@ class AIAgent:
                              pending.remove(future)
                              if future in future_map:
                                  name = future_map[future]
+                                 
+                                 # Cleanup Execution ID
+                                 with self.active_action_ids_lock:
+                                     if self.active_action_ids.get(chat_id):
+                                         # Only remove if it belongs to this action 
+                                         # (Wait, if we run multiple parallel, this logic is shaky for multiple, but user usually runs one)
+                                         # We'll assume the last one started is the "active" one for UI purposes.
+                                         pass 
+                                         # Actually executor cleans up internal map. We just track for UI cancel.
+                                         del self.active_action_ids[chat_id]
+
                                  try:
                                      exec_result = future.result()
                                      obs_text = json.dumps(exec_result.get("output", {})) if exec_result["status"] == "success" else f"Error: {exec_result.get('error')}"
@@ -306,35 +349,33 @@ class AIAgent:
                                  except Exception as e:
                                      observations.append(f"Action '{name}' Failed: {str(e)}")
 
-                         # Update System Prompt to "action_formater" mode
-                         observations_str = "\n".join(observations)
-                         
-                         new_sys_prompt = build_system_prompt(
-                             user_id=user_id,
-                             available_actions=available_actions_list,
-                             action_data=observations_str, 
-                             bot_config=bot_config,
-                             prompt_id="action_formater",
-                             user_message=prompt
-                         )
-                         
-                         # Update System Message in History
-                         if loop_history and loop_history[0].get('role') == 'system':
-                             loop_history[0]['content'] = new_sys_prompt
-                             # CRITICAL FIX: Update the variable used by the provider!
-                             system_prompt = new_sys_prompt
-                             # print(f"[DEBUG:Resume] Updated System Prompt with {len(observations)} observations", flush=True)
-                         
-                         # Set current prompt to trigger summary
-                         current_prompt = "Actions executed. Please formulate the response."
-                         current_loop = 1
-                         print(f"[DEBUG:Resume] Resume complete. Switching to Loop", flush=True)
+
+                     # Update System Prompt to "action_formater" mode
+                     observations_str = "\n".join(observations)
+                     
+                     new_sys_prompt = build_system_prompt(
+                         user_id=user_id,
+                         available_actions=available_actions_list,
+                         action_data=observations_str, 
+                         bot_config=bot_config,
+                         prompt_id="action_formater",
+                         user_message=prompt
+                     )
+                     
+                     # Update System Message in History
+                     if loop_history and loop_history[0].get('role') == 'system':
+                         loop_history[0]['content'] = new_sys_prompt
+                         # CRITICAL FIX: Update the variable used by the provider!
+                         system_prompt = new_sys_prompt
+                     
+                     # Set current prompt to trigger summary
+                     current_prompt = "Actions executed. Please formulate the response."
+                     current_loop = 1
                 else:
                      print(f"[DEBUG:Resume] No actions found to resume!", flush=True)
                      current_prompt = prompt # Fallback
             
-            else:
-                current_prompt = prompt
+
 
             full_content_raw = ""
             accumulated_thinking = ""
@@ -518,7 +559,14 @@ class AIAgent:
                         return # Stop generator
 
                     # PARALLEL EXECUTION
+                    futures = []
                     future_map = {}
+                    pending = []
+                    progress_q = queue.Queue()
+                    
+                    def make_cb(name):
+                        return lambda d: progress_q.put({"name": name, "data": d})
+                    
                     for act in found_actions:
                         action_name = act["name"]
                         action_args = act["args"]
@@ -526,72 +574,138 @@ class AIAgent:
                             print(f"[DEBUG:Core] Executing Action: {action_name} Args: {action_args}", flush=True)
                             action_def = self.action_registry.get_action(action_name)
                             if action_def:
-                                ctx = {"user_id": user_id, "chat_id": chat_id}
-                                f = self.thread_pool.submit(self.action_executor.execute, action_def, action_args, ctx)
+                                # Generate and Track Execution ID
+                                execution_id = str(uuid.uuid4())
+                                with self.active_action_ids_lock:
+                                    self.active_action_ids[chat_id] = execution_id
+                                
+                                ctx = {"user_id": user_id, "chat_id": chat_id, "execution_id": execution_id}
+                                
+                                f = self.thread_pool.submit(self.action_executor.execute, action_def, action_args, ctx, make_cb(action_name))
                                 future_map[f] = action_name
+                                pending.append(f)
                             else:
                                 print(f"[DEBUG:Core] Action {action_name} not found in registry", flush=True)
                         except Exception as e:
                             print(f"[DEBUG:Core] Error preparing action {action_name}: {e}", flush=True)
-                    if future_map:
-                        for future in as_completed(future_map):
-                           name = future_map[future]
-                           try:
-                               exec_result = future.result()
-                               obs = json.dumps(exec_result.get("output", {})) if exec_result["status"] == "success" else f"Error: {exec_result.get('error')}"
-                               
-                               # [DEBUG:Action]
-                               print(f"[DEBUG:Action] Action '{name}' returned: {obs}", flush=True)
 
-                               observations.append(f"Action '{name}' Result: {obs}")
-                               
-                               # Log to Database for History/Web UI
-                               try:
-                                   # save_chat_item is imported globally
-                                   save_chat_item(chat_id, "system", f"[Action Output: {name}] {obs}")
-                               except Exception as e:
-                                   print(f"[DEBUG:Core] Failed to log action result: {e}")
-
-                               status = "success" if exec_result["status"] == "success" else "error"
-                               yield {
-                                    "status": "action_output",
-                                    "action_name": name,
-                                    "action_status": status,
-                                    "output": obs[:500],
-                                    "chat_id": chat_id
-                               }
-                           except Exception as e:
-                               observations.append(f"Action '{name}' Failed: {str(e)}")
-
-                        # Prepare Action Data for System Prompt
-                        observations_str = "\n".join(observations)
-                        
-                        # Switch to "action_formater" System Prompt
-                        new_sys_prompt = build_system_prompt(
-                             user_id=user_id,
-                             available_actions=available_actions_list,
-                             action_data=observations_str, 
-                             bot_config=bot_config,
-                             prompt_id="action_formater",
-                             user_message=prompt
-                        )
+                    # Streaming Wait Loop (Main)
+                    while pending or not progress_q.empty():
+                         # 1. Drain Queue (Non-blocking)
+                         while not progress_q.empty():
+                             try:
+                                 msg = progress_q.get_nowait()
+                                 status_msg = ""
+                                 # Parse known progress fields
+                                 if "scanned" in msg["data"]:
+                                     status_msg = f"Scanned {msg['data']['scanned']} items..."
+                                 elif "message" in msg["data"]:
+                                     status_msg = msg["data"]["message"]
+                                 
+                                 if status_msg:
+                                    # Yield progress chunk directly to chat stream
+                                    yield {"status": "content", "chunk": f"[{msg['name']} Progress]: {status_msg}\n", "chat_id": chat_id}
+                                 
+                                 # Handle Action Update (Match Found)
+                                 if "status" in msg["data"] and msg["data"]["status"] == "match":
+                                     yield {
+                                         "status": "action_update",
+                                         "type": "match",
+                                         "data": msg["data"],
+                                         "chat_id": chat_id
+                                     }
+                             except:
+                                 break
                          
-                        # Update System Message in History Loop
-                        if loop_history and loop_history[0].get('role') == 'system':
-                             loop_history[0]['content'] = new_sys_prompt
+                         if not pending:
+                             break
+                             
+                         # 2. Wait for Futures
+                         done, not_done = wait(pending, timeout=0.1, return_when=FIRST_COMPLETED)
+                         
+                         for future in done:
+                             pending.remove(future)
+                             if future in future_map:
+                                 name = future_map[future]
+                                 
+                                 # Cleanup Execution ID
+                                 with self.active_action_ids_lock:
+                                     if self.active_action_ids.get(chat_id):
+                                         del self.active_action_ids[chat_id]
 
-                        # Commit the previous turn to history
-                        if current_loop == 0:
-                            loop_history.append({"role": "user", "content": prompt or "Action Request"}) 
-                        loop_history.append({"role": "assistant", "content": full_content_raw})
+                                 try:
+                                     exec_result = future.result()
+                                     
+                                     # Smart Output Unwrap
+                                     output_val = exec_result.get("output", {})
+                                     if exec_result["status"] == "success":
+                                         if isinstance(output_val, str):
+                                             obs = output_val
+                                         elif isinstance(output_val, dict) and len(output_val) == 1 and "output" in output_val and isinstance(output_val["output"], str):
+                                             obs = output_val["output"]
+                                         else:
+                                             obs = json.dumps(output_val)
+                                     else:
+                                         obs = f"Error: {exec_result.get('error')}"
+                                         # Check for partial output
+                                         if "partial_output" in exec_result:
+                                              obs += f"\n[Partial Output]: {exec_result['partial_output']}"
+                                     
+                                     # [DEBUG:Action]
+                                     print(f"[DEBUG:Action] Action '{name}' returned: {obs}", flush=True)
+      
+                                     observations.append(f"Action '{name}' Result: {obs}")
+                                     
+                                     # Log to Database for History/Web UI
+                                     try:
+                                         # save_chat_item is imported globally
+                                         save_chat_item(chat_id, "system", f"[Action Output: {name}] {obs}")
+                                     except Exception as e:
+                                         print(f"[DEBUG:Core] Failed to log action result: {e}")
+                                     
+                                     action_status = "success" if exec_result["status"] == "success" else "error"
+                                     yield {
+                                          "status": "action_output",
+                                          "action_name": name,
+                                          "action_status": action_status,
+                                          "output": obs[:500],
+                                          "chat_id": chat_id
+                                     }
+                                 except Exception as e:
+                                     observations.append(f"Action '{name}' Failed: {str(e)}")
+
+
+
+
+                    # Prepare Action Data for System Prompt
+                    observations_str = "\n".join(observations)
+                    
+                    # Switch to "action_formater" System Prompt
+                    new_sys_prompt = build_system_prompt(
+                         user_id=user_id,
+                         available_actions=available_actions_list,
+                         action_data=observations_str, 
+                         bot_config=bot_config,
+                         prompt_id="action_formater",
+                         user_message=prompt
+                    )
+                     
+                    # Update System Message in History Loop
+                    if loop_history and loop_history[0].get('role') == 'system':
+                         loop_history[0]['content'] = new_sys_prompt
+
+                    # Commit the previous turn to history
+                    if current_loop == 0:
+                        loop_history.append({"role": "user", "content": prompt or "Action Request"}) 
+                    loop_history.append({"role": "assistant", "content": full_content_raw})
+                    
+                    # Set trigger for next generation
+                    current_prompt = "Actions executed. Please formulate the response."
                         
-                        # Set trigger for next generation
-                        current_prompt = "Actions executed. Please formulate the response."
-                        
-                        current_loop += 1
-                        continue
-                    else:
-                        break # No valid actions 
+                    current_loop += 1
+                    continue
+                else:
+                    break # No valid actions 
                 
                 # NO ACTIONS FOUND - Final Response Analysis
                 # If we are expecting JSON, and we have a full buffer, let's try to parse it.
@@ -606,6 +720,15 @@ class AIAgent:
                              "json": parsed,
                              "chat_id": chat_id,
                              "reason": parsed.get("reason", "") # Optional reason field
+                        }
+                    else:
+                        # FALLBACK: If we couldn't parse JSON, treat the whole thing as the message
+                        # This prevents the UI from hanging on "Building..."
+                        yield {
+                             "status": "json_content",
+                             "message": full_content_raw,
+                             "json": {},
+                             "chat_id": chat_id
                         }
                     # If parsing fails, we falls through (raw content was already yielded)
                 

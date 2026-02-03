@@ -3,6 +3,7 @@
     "name": "Hello World",
     "version": "1.0.0",
     "description": "A simple test plugin.",
+    "maker": "Computer Aces",
     "actions": [
         {
             "name": "say_hello",

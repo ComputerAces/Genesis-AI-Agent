@@ -445,6 +445,20 @@
             userInput.style.height = (userInput.scrollHeight) + 'px';
         });
 
+        async function stopAction(chatId) {
+            try {
+                const resp = await fetch('/api/action/cancel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: chatId })
+                });
+                const res = await resp.json();
+                console.log("Stop Action Result:", res);
+            } catch (e) {
+                console.error("Failed to stop action:", e);
+            }
+        }
+
         async function handleChatStream(response) {
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
@@ -618,7 +632,12 @@
                             // Show specific actions being run
                             const actionNames = (data.actions || []).join(', ');
                             if (assistantMsgDiv) {
-                                assistantMsgDiv.innerHTML = `<i class="fas fa-cogs fa-spin"></i> Running Actions: ${actionNames}...`;
+                                assistantMsgDiv.innerHTML = `
+                                    <div class="action-status-bar" style="display:flex; justify-content:space-between; align-items:center;">
+                                        <span><i class="fas fa-cogs fa-spin"></i> Running Actions: ${actionNames}...</span>
+                                        <button class="stop-action-btn" onclick="stopAction('${streamChatId}')" title="Stop Action"><i class="fas fa-stop"></i></button>
+                                    </div>
+                                `;
                                 assistantMsgDiv.dataset.building = "true";
                                 chatContainer.scrollTop = chatContainer.scrollHeight;
                             }
@@ -629,7 +648,12 @@
 
                             if (assistantMsgDiv) {
                                 // If in "Building" mode, update the text
-                                if (assistantMsgDiv.dataset.building) {
+                                const statusBar = assistantMsgDiv.querySelector('.action-status-bar');
+                                if (statusBar) {
+                                    const span = statusBar.querySelector('span');
+                                    if (span) span.innerHTML = `<i class="fas fa-sync-alt fa-spin"></i> Processing Action Chain (Step ${loopNum}/${maxLoops})...`;
+                                } else if (assistantMsgDiv.dataset.building) {
+                                    // Fallback
                                     assistantMsgDiv.innerHTML = `<i class="fas fa-sync-alt fa-spin"></i> Processing Action Chain (Step ${loopNum}/${maxLoops})...`;
                                 } else {
                                     // If we are appending to existing content (rare in Building mode but possible)
@@ -643,6 +667,43 @@
                                     loopIndicator.innerHTML = `<i class="fas fa-sync-alt fa-spin"></i> Action Loop: ${loopNum}/${maxLoops}`;
                                 }
                             }
+                        } else if (data.status === 'action_update') {
+                            // Handle Real-time Updates (like Matches)
+                            if (data.type === 'match' && assistantMsgDiv) {
+                                // 1. Update/Create Live Log
+                                let liveLog = assistantMsgDiv.querySelector('.live-action-log');
+                                if (!liveLog) {
+                                    liveLog = document.createElement('div');
+                                    liveLog.className = 'live-action-log';
+                                    liveLog.style.cssText = 'margin-top:0.5rem; max-height:150px; overflow-y:auto; font-size:0.8rem; background:rgba(0,0,0,0.1); padding:0.5rem; border-radius:0.25rem;';
+                                    assistantMsgDiv.appendChild(liveLog);
+                                }
+
+                                // 2. Update/Create Stats Counter
+                                let statsCounter = assistantMsgDiv.querySelector('.action-stats-counter');
+                                if (!statsCounter) {
+                                    // Try to insert it before the log or in the status bar
+                                    const statusBar = assistantMsgDiv.querySelector('.action-status-bar');
+                                    if (statusBar) {
+                                        statsCounter = document.createElement('span');
+                                        statsCounter.className = 'action-stats-counter';
+                                        statsCounter.style.cssText = 'font-size:0.8rem;margin-left:1rem;opacity:0.8;';
+                                        statusBar.querySelector('span').appendChild(statsCounter);
+                                    }
+                                }
+
+                                const file = data.data.file;
+                                const item = document.createElement('div');
+                                item.textContent = `Found: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+                                item.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+                                liveLog.appendChild(item);
+                                liveLog.scrollTop = liveLog.scrollHeight;
+
+                                // Update Stats Text if available
+                                if (data.data.scanned !== undefined && statsCounter) {
+                                    statsCounter.textContent = `| Scanned: ${data.data.scanned} | Found: ${data.data.found}`;
+                                }
+                            }
                         } else if (data.status === 'action_output') {
                             // Show action execution result
                             const actionName = data.action_name || 'action';
@@ -650,6 +711,12 @@
                             const output = data.output || '';
                             const statusIcon = actionStatus === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
                             const statusColor = actionStatus === 'success' ? '#28a745' : '#dc3545';
+
+                            // Remove stop button if present
+                            if (assistantMsgDiv) {
+                                const btn = assistantMsgDiv.querySelector('.stop-action-btn');
+                                if (btn) btn.remove();
+                            }
 
                             if (assistantMsgDiv) {
                                 const outputDiv = document.createElement('div');
